@@ -11,7 +11,7 @@
     state: directory
     mode: '0700'
 
-- name: Download Foreman and Katello release RPMs
+name: Download release RPMs (Foreman, Katello, Puppet)
   get_url:
     url: "{{ item }}"
     dest: "{{ safe_tmp_dir }}/{{ item | basename }}"
@@ -19,14 +19,16 @@
   loop:
     - "{{ foreman_repo_url }}"
     - "{{ katello_repo_url }}"
+    - "{{ puppet_repo_url }}"
 
 - name: Install release packages from local path
   dnf:
     name:
       - "{{ safe_tmp_dir }}/{{ foreman_repo_url | basename }}"
       - "{{ safe_tmp_dir }}/{{ katello_repo_url | basename }}"
+      - "{{ safe_tmp_dir }}/{{ puppet_repo_url | basename }}"
     state: present
-    disable_gpg_check: no
+    disable_gpg_check: yes
   environment:
     TMPDIR: "{{ safe_tmp_dir }}"
 

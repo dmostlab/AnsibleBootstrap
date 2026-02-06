@@ -1,10 +1,12 @@
 # Versioning
 foreman_ver: "3.12"
 katello_ver: "4.14"
+puppet_ver: "7" # Puppet 7 is the standard for Foreman 3.12
 
 # Repository URLs
 foreman_repo_url: "https://yum.theforeman.org/releases/{{ foreman_ver }}/el9/x86_64/foreman-release.rpm"
-katello_repo_url: "https://yum.theforeman.org/katello/{{ katello_ver }}/katello/el9/x86_64/katello-repos-latest.rpm"
+katello_repo_url: "https://yum.theforeman.org/katello/{{ katello_ver }}/katello/el9/x86_64/katello-release.rpm"
+puppet_repo_url: "https://yum.puppet.com/puppet{{ puppet_ver }}-release-el-9.noarch.rpm"
 
 # Paths
 safe_tmp_dir: "{{ ansible_user_dir }}/.ansible/tmp"
