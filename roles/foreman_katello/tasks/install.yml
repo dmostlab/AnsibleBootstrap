@@ -37,6 +37,8 @@ name: Download release RPMs (Foreman, Katello, Puppet)
     name:
       - foreman-installer
       - katello
+      - puppet-agent
+      - rubygem-kafo
     state: present
   environment:
     TMPDIR: "{{ safe_tmp_dir }}"
