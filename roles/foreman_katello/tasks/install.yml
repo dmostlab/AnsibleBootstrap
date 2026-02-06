@@ -5,12 +5,28 @@
       - ansible_mounts | selectattr('mount', 'equalto', foreman_pulp_mount) | list | length > 0
     fail_msg: "Pulp storage is not mounted at {{ foreman_pulp_mount }}."
 
-- name: Install release packages from remote URLs
+- name: Ensure RPM cache directory exists
+  file:
+    path: "{{ foreman_rpm_cache_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Download release RPMs (Foreman, Katello, Puppet)
+  get_url:
+    url: "{{ item }}"
+    dest: "{{ foreman_rpm_cache_dir }}/{{ item | basename }}"
+    mode: '0644'
+  loop:
+    - "{{ foreman_repo_url }}"
+    - "{{ katello_repo_url }}"
+    - "{{ puppet_repo_url }}"
+
+- name: Install release packages from local path
   dnf:
     name:
-      - "{{ foreman_repo_url }}"
-      - "{{ katello_repo_url }}"
-      - "{{ puppet_repo_url }}"
+      - "{{ foreman_rpm_cache_dir }}/{{ foreman_repo_url | basename }}"
+      - "{{ foreman_rpm_cache_dir }}/{{ katello_repo_url | basename }}"
+      - "{{ foreman_rpm_cache_dir }}/{{ puppet_repo_url | basename }}"
     state: present
     disable_gpg_check: yes
 

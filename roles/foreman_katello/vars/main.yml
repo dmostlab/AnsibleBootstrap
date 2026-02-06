@@ -15,6 +15,9 @@ foreman_pulp_size: "100%FREE"
 foreman_pulp_mount: "/var/lib/pulp"
 foreman_pulp_pvs: "/dev/sdb"
 
+# RPM Cache
+foreman_rpm_cache_dir: "/var/cache/foreman-katello"
+
 # Firewall Overrides
 katello_required_ports:
   - { port: '443', proto: 'tcp', comment: 'HTTPS' }
