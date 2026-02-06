@@ -8,6 +8,8 @@
     vg: "{{ foreman_pulp_vg }}"
     lv: "{{ foreman_pulp_lv }}"
     size: "{{ foreman_pulp_size }}"
+    shrink: no
+    force: no
 
 - name: Create XFS filesystem on Pulp LV
   community.general.filesystem:

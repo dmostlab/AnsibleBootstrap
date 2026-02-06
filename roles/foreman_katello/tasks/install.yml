@@ -1,18 +1,43 @@
 ---
-- name: Enable Katello and Foreman Repositories
+- name: Pre-flight - Verify Pulp storage is mounted
+  assert:
+    that:
+      - ansible_mounts | selectattr('mount', 'equalto', foreman_pulp_mount) | list | length > 0
+    fail_msg: "Pulp storage is not mounted at {{ foreman_pulp_mount }}."
+
+- name: Ensure the parameterized temp directory exists
+  file:
+    path: "{{ safe_tmp_dir }}"
+    state: directory
+    mode: '0700'
+
+- name: Download Foreman and Katello release RPMs
+  get_url:
+    url: "{{ item }}"
+    dest: "{{ safe_tmp_dir }}/{{ item | basename }}"
+    mode: '0644'
+  loop:
+    - "{{ foreman_repo_url }}"
+    - "{{ katello_repo_url }}"
+
+- name: Install release packages from local path
   dnf:
     name:
-      - https://yum.theforeman.org/releases/3.9/el9/x86_64/foreman-release.rpm
-      - https://yum.theforeman.org/katello/4.11/katello/el9/x86_64/katello-release.rpm
+      - "{{ safe_tmp_dir }}/{{ foreman_repo_url | basename }}"
+      - "{{ safe_tmp_dir }}/{{ katello_repo_url | basename }}"
     state: present
     disable_gpg_check: no
+  environment:
+    TMPDIR: "{{ safe_tmp_dir }}"
 
-- name: Install Foreman/Katello packages
+- name: Install Foreman/Katello installer packages
   dnf:
     name:
       - foreman-installer
       - katello
     state: present
+  environment:
+    TMPDIR: "{{ safe_tmp_dir }}"
 
 - name: Ensure installer configuration directory exists
   file:
@@ -31,7 +56,6 @@
     foreman-installer --scenario katello
     --answers-file /etc/foreman-installer/scenarios.d/katello-answers.yaml
   args:
-    # We check for the foreman settings file to determine if the app is already configured
     creates: /etc/foreman/settings.yaml
   register: installer_output
   failed_when: "'Main Step: Success' not in installer_output.stdout"

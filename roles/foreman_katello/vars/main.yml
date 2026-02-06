@@ -1,8 +1,18 @@
+# Versioning
+foreman_ver: "3.12"
+katello_ver: "4.14"
+
+# Repository URLs
+foreman_repo_url: "https://yum.theforeman.org/releases/{{ foreman_ver }}/el9/x86_64/foreman-release.rpm"
+katello_repo_url: "https://yum.theforeman.org/katello/{{ katello_ver }}/katello/el9/x86_64/katello-release.rpm"
+
+# Paths
+safe_tmp_dir: "{{ ansible_user_dir }}/.ansible/tmp"
 
 # Storage Configuration
 foreman_pulp_vg: "vg_data"
 foreman_pulp_lv: "lv_pulp"
-foreman_pulp_size: "100G"
+foreman_pulp_size: "100%FREE"
 foreman_pulp_mount: "/var/lib/pulp"
 
 # Firewall Overrides
