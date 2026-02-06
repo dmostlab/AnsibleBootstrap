@@ -4,7 +4,7 @@ katello_ver: "4.14"
 
 # Repository URLs
 foreman_repo_url: "https://yum.theforeman.org/releases/{{ foreman_ver }}/el9/x86_64/foreman-release.rpm"
-katello_repo_url: "https://yum.theforeman.org/katello/{{ katello_ver }}/katello/el9/x86_64/katello-release.rpm"
+katello_repo_url: "https://yum.theforeman.org/katello/{{ katello_ver }}/katello/el9/x86_64/katello-repos-latest.rpm"
 
 # Paths
 safe_tmp_dir: "{{ ansible_user_dir }}/.ansible/tmp"
