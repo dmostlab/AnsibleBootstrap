@@ -55,6 +55,10 @@ name: Download release RPMs (Foreman, Katello, Puppet)
     dest: /etc/foreman-installer/scenarios.d/katello-answers.yaml
     mode: '0640'
 
+- name: Temporarily set fapolicyd to permissive for installation
+  command: fapolicyd-cli --permissive
+  failed_when: false # In case it's already permissive or not running
+
 - name: Run Foreman-Katello Installer
   command: >
     foreman-installer --scenario katello
@@ -67,3 +71,7 @@ name: Download release RPMs (Foreman, Katello, Puppet)
     PATH: "/sbin:/bin:/usr/sbin:/usr/bin:/opt/puppetlabs/bin"
     TERM: xterm-256color
   failed_when: "'Main Step: Success' not in installer_output.stdout"
+
+  - name: Restore fapolicyd restrictive mode
+  command: fapolicyd-cli --update && fapolicyd-cli --enforce
+  when: installer_output is succeeded
