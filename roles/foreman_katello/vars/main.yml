@@ -1,0 +1,13 @@
+
+# Storage Configuration
+foreman_pulp_vg: "vg_data"
+foreman_pulp_lv: "lv_pulp"
+foreman_pulp_size: "100G"
+foreman_pulp_mount: "/var/lib/pulp"
+
+# Firewall Overrides
+katello_required_ports:
+  - { port: '443', proto: 'tcp', comment: 'HTTPS' }
+  - { port: '5647', proto: 'tcp', comment: 'Qpid' }
+  - { port: '8000', proto: 'tcp', comment: 'Pulp' }
+  - { port: '9090', proto: 'tcp', comment: 'Smart Proxy' }

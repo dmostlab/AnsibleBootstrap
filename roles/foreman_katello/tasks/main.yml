@@ -1,0 +1,22 @@
+---
+# roles/foreman_katello/tasks/main.yml
+
+- name: Prepare Storage for Pulp
+  import_tasks: storage.yml
+
+- name: Configure Firewall for Katello
+  import_tasks: firewall.yml
+
+- name: Execute Foreman-Katello Installation
+  import_tasks: install.yml
+
+- name: Verify Services are Running
+  service:
+    name: "{{ item }}"
+    state: started
+    enabled: yes
+  loop:
+    - foreman
+    - postgresql
+    - candlepin
+    - pulpcore-api

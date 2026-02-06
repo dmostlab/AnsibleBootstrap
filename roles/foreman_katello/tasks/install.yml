@@ -1,0 +1,31 @@
+---
+- name: Enable Katello and Foreman Repositories
+  dnf:
+    name:
+      - https://yum.theforeman.org/releases/3.9/el9/x86_64/foreman-release.rpm
+      - https://yum.theforeman.org/katello/4.11/katello/el9/x86_64/katello-release.rpm
+    state: present
+    disable_gpg_check: no
+
+- name: Install Foreman/Katello packages
+  dnf:
+    name:
+      - foreman-installer
+      - katello
+    state: present
+
+# --- NEW TASK GOES HERE ---
+
+- name: Run Foreman-Katello Installer
+  command: >
+    foreman-installer --scenario katello
+    --foreman-initial-admin-password {{ foreman_admin_password }}
+    --foreman-proxy-dns=false
+    --foreman-proxy-dhcp=false
+    --enable-foreman-compute-libvirt
+    --reset-puppet-ca-cert-on-next-run
+  args:
+    # This ensures the installer doesn't run again if it's already succeeded
+    creates: /etc/foreman-installer/scenarios.d/katello-answers.yaml
+  register: installer_output
+  failed_when: "'Main Step: Success' not in installer_output.stdout"
