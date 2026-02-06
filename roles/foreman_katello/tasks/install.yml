@@ -14,18 +14,24 @@
       - katello
     state: present
 
-# --- NEW TASK GOES HERE ---
+- name: Ensure installer configuration directory exists
+  file:
+    path: /etc/foreman-installer/scenarios.d
+    state: directory
+    mode: '0750'
+
+- name: Deploy Katello answers file from template
+  template:
+    src: katello-answers.j2
+    dest: /etc/foreman-installer/scenarios.d/katello-answers.yaml
+    mode: '0640'
 
 - name: Run Foreman-Katello Installer
   command: >
     foreman-installer --scenario katello
-    --foreman-initial-admin-password {{ foreman_admin_password }}
-    --foreman-proxy-dns=false
-    --foreman-proxy-dhcp=false
-    --enable-foreman-compute-libvirt
-    --reset-puppet-ca-cert-on-next-run
+    --answers-file /etc/foreman-installer/scenarios.d/katello-answers.yaml
   args:
-    # This ensures the installer doesn't run again if it's already succeeded
-    creates: /etc/foreman-installer/scenarios.d/katello-answers.yaml
+    # We check for the foreman settings file to determine if the app is already configured
+    creates: /etc/foreman/settings.yaml
   register: installer_output
   failed_when: "'Main Step: Success' not in installer_output.stdout"
