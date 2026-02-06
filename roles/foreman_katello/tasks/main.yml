@@ -9,14 +9,3 @@
 
 - name: Execute Foreman-Katello Installation
   import_tasks: install.yml
-
-- name: Verify Services are Running
-  service:
-    name: "{{ item }}"
-    state: started
-    enabled: yes
-  loop:
-    - foreman
-    - postgresql
-    - candlepin
-    - pulpcore-api

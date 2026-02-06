@@ -8,14 +8,12 @@ foreman_repo_url: "https://yum.theforeman.org/releases/{{ foreman_ver }}/el9/x86
 katello_repo_url: "https://yum.theforeman.org/katello/{{ katello_ver }}/katello/el9/x86_64/katello-release.rpm"
 puppet_repo_url: "https://yum.puppet.com/puppet{{ puppet_ver }}-release-el-9.noarch.rpm"
 
-# Paths
-safe_tmp_dir: "{{ ansible_user_dir }}/.ansible/tmp"
-
 # Storage Configuration
 foreman_pulp_vg: "vg_data"
 foreman_pulp_lv: "lv_pulp"
 foreman_pulp_size: "100%FREE"
 foreman_pulp_mount: "/var/lib/pulp"
+foreman_pulp_pvs: "/dev/sdb"
 
 # Firewall Overrides
 katello_required_ports:

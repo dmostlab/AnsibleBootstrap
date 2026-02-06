@@ -1,18 +1,21 @@
 # templates/katello-answers.j2
 ---
 # Identity & Security
-foreman::initial_admin_password: "{{ foreman_admin_password }}"
-foreman::initial_organization: "Default_Organization"
-foreman::initial_location: "Default_Location"
+foreman:
+  initial_admin_password: "{{ foreman_admin_password }}"
+  initial_organization: "Default Organization"
+  initial_location: "Default Location"
 
 # Provisioning Logic (Replaces your CLI flags)
 foreman_proxy::dns: false
 foreman_proxy::dhcp: false
-foreman::compute_libvirt: true
+foreman::compute::libvirt: true
 
 # Hardening & FIPS
 # The installer automatically picks up FIPS, but we force Puppet CA reset for the new key-only foundation
-puppet::server_ca_core_reset: true
+puppet:
+  server_ca_core_reset: true
 
 # Storage Logic
-katello::pulp_storage_path: "{{ foreman_pulp_mount }}"
+katello:
+  pulp_storage_path: "{{ foreman_pulp_mount }}"

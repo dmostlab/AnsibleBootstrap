@@ -1,7 +1,7 @@
 - name: Ensure LVM group exists
   community.general.lvg:
     vg: "{{ foreman_pulp_vg }}"
-    pvs: /dev/sdb  # Adjust based on your actual disk identifier
+    pvs: "{{ foreman_pulp_pvs }}"
 
 - name: Create Logical Volume for Pulp
   community.general.lvol:

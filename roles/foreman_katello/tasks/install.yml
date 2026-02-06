@@ -5,32 +5,14 @@
       - ansible_mounts | selectattr('mount', 'equalto', foreman_pulp_mount) | list | length > 0
     fail_msg: "Pulp storage is not mounted at {{ foreman_pulp_mount }}."
 
-- name: Ensure the parameterized temp directory exists
-  file:
-    path: "{{ safe_tmp_dir }}"
-    state: directory
-    mode: '0700'
-
-name: Download release RPMs (Foreman, Katello, Puppet)
-  get_url:
-    url: "{{ item }}"
-    dest: "{{ safe_tmp_dir }}/{{ item | basename }}"
-    mode: '0644'
-  loop:
-    - "{{ foreman_repo_url }}"
-    - "{{ katello_repo_url }}"
-    - "{{ puppet_repo_url }}"
-
-- name: Install release packages from local path
+- name: Install release packages from remote URLs
   dnf:
     name:
-      - "{{ safe_tmp_dir }}/{{ foreman_repo_url | basename }}"
-      - "{{ safe_tmp_dir }}/{{ katello_repo_url | basename }}"
-      - "{{ safe_tmp_dir }}/{{ puppet_repo_url | basename }}"
+      - "{{ foreman_repo_url }}"
+      - "{{ katello_repo_url }}"
+      - "{{ puppet_repo_url }}"
     state: present
     disable_gpg_check: yes
-  environment:
-    TMPDIR: "{{ safe_tmp_dir }}"
 
 - name: Install Foreman/Katello installer packages
   dnf:
@@ -40,8 +22,6 @@ name: Download release RPMs (Foreman, Katello, Puppet)
       - puppet-agent
       - rubygem-kafo
     state: present
-  environment:
-    TMPDIR: "{{ safe_tmp_dir }}"
 
 - name: Ensure installer configuration directory exists
   file:
@@ -55,10 +35,6 @@ name: Download release RPMs (Foreman, Katello, Puppet)
     dest: /etc/foreman-installer/scenarios.d/katello-answers.yaml
     mode: '0640'
 
-- name: Temporarily set fapolicyd to permissive for installation
-  command: fapolicyd-cli --permissive
-  failed_when: false # In case it's already permissive or not running
-
 - name: Run Foreman-Katello Installer
   command: >
     foreman-installer --scenario katello
@@ -66,12 +42,7 @@ name: Download release RPMs (Foreman, Katello, Puppet)
   args:
     creates: /etc/foreman/settings.yaml
   register: installer_output
-  failed_when: "'Main Step: Success' not in installer_output.stdout"
   environment:
     PATH: "/sbin:/bin:/usr/sbin:/usr/bin:/opt/puppetlabs/bin"
     TERM: xterm-256color
   failed_when: "'Main Step: Success' not in installer_output.stdout"
-
-  - name: Restore fapolicyd restrictive mode
-  command: fapolicyd-cli --update && fapolicyd-cli --enforce
-  when: installer_output is succeeded
