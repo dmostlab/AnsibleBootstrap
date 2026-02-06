@@ -63,3 +63,7 @@ name: Download release RPMs (Foreman, Katello, Puppet)
     creates: /etc/foreman/settings.yaml
   register: installer_output
   failed_when: "'Main Step: Success' not in installer_output.stdout"
+  environment:
+    PATH: "/sbin:/bin:/usr/sbin:/usr/bin:/opt/puppetlabs/bin"
+    TERM: xterm-256color
+  failed_when: "'Main Step: Success' not in installer_output.stdout"
