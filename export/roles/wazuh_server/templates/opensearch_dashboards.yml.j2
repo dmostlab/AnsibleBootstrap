@@ -1,0 +1,14 @@
+﻿server.host: "{{ wazuh_dashboard_server_host }}"
+server.port: {{ wazuh_dashboard_server_port }}
+
+# Connection to Indexer Cluster
+opensearch.hosts: {{ wazuh_indexer_hosts | to_json }}
+opensearch.ssl.verificationMode: "{{ 'full' if wazuh_dashboard_opensearch_ssl_verification else 'certificate' }}"
+opensearch.ssl.certificateAuthorities: ["{{ wazuh_dashboard_ca_path }}"]
+
+# TLS and Security Hardening
+server.ssl.enabled: true
+server.ssl.certificate: "{{ wazuh_dashboard_cert_path }}"
+server.ssl.key: "{{ wazuh_dashboard_key_path }}"
+server.ssl.supportedProtocols: ["TLSv1.2", "TLSv1.3"]
+server.ssl.cipherSuites: ["ECDHE-RSA-AES128-GCM-SHA256", "ECDHE-RSA-AES256-GCM-SHA384"]

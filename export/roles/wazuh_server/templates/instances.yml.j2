@@ -1,0 +1,33 @@
+nodes:
+  # Wazuh indexer nodes
+  indexer:
+{% for host in groups['wazuh_indexer'] | default([]) %}
+    - name: {{ host }}
+      ip: "{{ hostvars[host]['ansible_default_ipv4']['address'] }}"
+      dns:
+        - "{{ host }}"
+        - "{{ host }}.{{ wazuh_domain }}"
+{% endfor %}
+
+  # Wazuh server nodes
+  server:
+{% for host in groups['wazuh_manager'] | default([]) %}
+    - name: {{ host }}
+      ip: "{{ hostvars[host]['ansible_default_ipv4']['address'] }}"
+      dns:
+        - "{{ host }}"
+        - "{{ host }}.{{ wazuh_domain }}"
+{% if groups['wazuh_manager'] | length > 1 %}
+      node_type: "{{ 'master' if loop.first else 'worker' }}"
+{% endif %}
+{% endfor %}
+
+  # Wazuh dashboard nodes
+  dashboard:
+{% for host in groups['wazuh_dashboard'] | default([]) %}
+    - name: {{ host }}
+      ip: "{{ hostvars[host]['ansible_default_ipv4']['address'] }}"
+      dns:
+        - "{{ host }}"
+        - "{{ host }}.{{ wazuh_domain }}"
+{% endfor %}

@@ -1,0 +1,78 @@
+---
+- name: Derive component toggles from inventory
+  ansible.builtin.set_fact:
+    wazuh_install_indexer: "{{ wazuh_install_indexer | default(false) or (inventory_hostname in (groups['wazuh_indexer'] | default([]))) }}"
+    wazuh_install_manager: "{{ wazuh_install_manager | default(false) or (inventory_hostname in (groups['wazuh_manager'] | default([]))) }}"
+    wazuh_install_dashboard: "{{ wazuh_install_dashboard | default(false) or (inventory_hostname in (groups['wazuh_dashboard'] | default([]))) }}"
+  when: wazuh_auto_from_inventory | bool
+
+- name: Derive indexer hosts from inventory
+  ansible.builtin.set_fact:
+    wazuh_indexer_hosts: >-
+      {{ groups['wazuh_indexer'] | default([])
+         | map('regex_replace', '^(.*)$', wazuh_indexer_host_scheme ~ '://\\1:' ~ wazuh_indexer_http_port)
+         | list }}
+  when:
+    - wazuh_auto_from_inventory | bool
+    - wazuh_indexer_hosts | default([]) | length == 0
+    - groups['wazuh_indexer'] | default([]) | length > 0
+
+- name: Adjust scheme and SSL verification when TLS is disabled
+  ansible.builtin.set_fact:
+    wazuh_indexer_host_scheme: http
+    wazuh_indexer_ssl_verify: false
+    wazuh_dashboard_opensearch_ssl_verification: false
+  when:
+    - wazuh_indexer_tls_enabled is defined
+    - not wazuh_indexer_tls_enabled | bool
+
+- name: Derive manager API hosts from inventory
+  ansible.builtin.set_fact:
+    wazuh_manager_api_hosts: "{{ groups['wazuh_manager'] | default([]) | list }}"
+  when:
+    - wazuh_auto_from_inventory | bool
+    - wazuh_manager_api_hosts | default([]) | length == 0
+    - groups['wazuh_manager'] | default([]) | length > 0
+
+- name: Validate manager inputs
+  ansible.builtin.assert:
+    that:
+      - wazuh_indexer_hosts | length > 0
+    fail_msg: "wazuh_indexer_hosts must be set when wazuh_install_manager is true."
+  when: wazuh_install_manager
+
+- name: Validate dashboard inputs
+  ansible.builtin.assert:
+    that:
+      - wazuh_indexer_hosts | length > 0
+      - wazuh_manager_api_hosts | length > 0
+    fail_msg: "wazuh_indexer_hosts and wazuh_manager_api_hosts must be set when wazuh_install_dashboard is true."
+  when: wazuh_install_dashboard
+
+- name: Configure Wazuh repository
+  ansible.builtin.include_tasks: repo.yml
+  when: wazuh_manage_repo
+
+- name: Configure firewalld
+  ansible.builtin.include_tasks: firewalld.yml
+  when: wazuh_manage_firewalld | bool
+
+- name: Generate certificates
+  ansible.builtin.include_tasks: certs.yml
+  when: wazuh_indexer_tls_enabled | bool
+
+- name: Configure fapolicyd
+  ansible.builtin.include_tasks: fapolicyd.yml
+  when: wazuh_manage_fapolicyd | bool
+
+- name: Install and configure Wazuh indexer
+  ansible.builtin.include_tasks: indexer.yml
+  when: wazuh_install_indexer
+
+- name: Install and configure Wazuh manager
+  ansible.builtin.include_tasks: manager.yml
+  when: wazuh_install_manager
+
+- name: Install and configure Wazuh dashboard
+  ansible.builtin.include_tasks: dashboard.yml
+  when: wazuh_install_dashboard

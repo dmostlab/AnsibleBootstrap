@@ -1,0 +1,38 @@
+- name: Generate Wazuh certificates on control node
+  delegate_to: localhost
+  run_once: true
+  become: true
+  block:
+    - name: Download Wazuh cert tool
+      ansible.builtin.get_url:
+        url:   https://packages.wazuh.com/4.14/wazuh-certs-tool.sh
+        dest: "{{ role_path }}/files/wazuh-certs-tool.sh"
+        mode: '0755'
+        owner: "{{ lookup('env', 'USER') }}"
+        group: "{{ lookup('env', 'USER') }}"
+
+    - name: Create config.yml from template
+      ansible.builtin.template:
+        src: instances.yml.j2
+        dest: "{{ role_path }}/files/config.yml"
+        owner: "{{ lookup('env', 'USER') }}"
+        group: "{{ lookup('env', 'USER') }}"
+        mode: '0644'
+
+    - name: Run Wazuh cert tool
+      ansible.builtin.command:
+        cmd: "bash wazuh-certs-tool.sh -A"
+        chdir: "{{ role_path }}/files/"
+      args:
+        creates: "{{ role_path }}/files/wazuh-certificates/root-ca.pem"
+
+    - name: Ensure certificates are owned by Ansible user
+      ansible.builtin.file:
+        path: "{{ role_path }}/files/wazuh-certificates"
+        owner: "{{ lookup('env', 'USER') }}"
+        group: "{{ lookup('env', 'USER') }}"
+        mode: '0755'
+        recurse: true
+
+
+

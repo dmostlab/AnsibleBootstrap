@@ -1,0 +1,29 @@
+- name: Install Wazuh fapolicyd rules (Hard-Coded)
+  ansible.builtin.copy:
+    dest: /etc/fapolicyd/rules.d/15-wazuh.rules
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Ansible - Hard-coded stable paths
+      # Wazuh Indexer Java
+      allow all all : path=/usr/share/wazuh-indexer/jdk/bin/java
+      
+      # Wazuh Manager Binaries
+      allow all all : path=/var/ossec/bin/wazuh-control
+      allow all all : path=/var/ossec/bin/wazuh-syscheckd
+      
+      # Wazuh Dashboard (Node.js)
+      allow all all : path=/usr/share/wazuh-dashboard/node/bin/node
+  register: wazuh_rules_file
+
+- name: Regenerate fapolicyd rules
+  ansible.builtin.shell: fagenrules --load
+  when: wazuh_rules_file.changed
+
+- name: Ensure fapolicyd is running and refreshed
+  ansible.builtin.systemd:
+    name: fapolicyd
+    state: restarted
+    enabled: yes
+  when: wazuh_rules_file.changed

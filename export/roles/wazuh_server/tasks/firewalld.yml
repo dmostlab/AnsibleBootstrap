@@ -1,0 +1,25 @@
+---
+- name: Ensure firewalld is running
+  ansible.builtin.service:
+    name: firewalld
+    state: started
+    enabled: true
+
+- name: Build firewalld port list
+  ansible.builtin.set_fact:
+    wazuh_firewalld_ports: >-
+      {{
+        [] +
+        (wazuh_install_indexer | bool | ternary([wazuh_indexer_http_port], [])) +
+        (wazuh_install_indexer | bool | ternary([wazuh_indexer_transport_port], [])) +
+        (wazuh_install_manager | bool | ternary([wazuh_manager_api_port], [])) +
+        (wazuh_install_dashboard | bool | ternary([wazuh_dashboard_server_port], []))
+      }}
+
+- name: Open Wazuh ports in firewalld
+  ansible.posix.firewalld:
+    port: "{{ item }}/tcp"
+    permanent: true
+    state: enabled
+    immediate: true
+  loop: "{{ wazuh_firewalld_ports | unique | list }}"

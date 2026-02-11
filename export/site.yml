@@ -1,0 +1,19 @@
+---
+- name: Apply STIG Baseline to Maryland Lab
+  hosts: management
+  roles:
+    - role: RedHatOfficial.rhel9_stig
+  tags: stig
+
+- name: Install Forman and Katello
+  hosts: management
+  roles:
+    - role: foreman_katello
+  tags: foreman
+
+
+- name: Install Wazuh
+  hosts: wazuh
+  roles:
+    - role: wazuh_server
+  tags: wazuh-server

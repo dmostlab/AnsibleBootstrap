@@ -1,0 +1,16 @@
+---
+- name: Open Katello specific ports
+  ansible.posix.firewalld:
+    port: "{{ item.port }}/{{ item.proto }}"
+    permanent: true
+    state: enabled
+    immediate: true
+  loop: "{{ katello_required_ports }}"
+  notify: Restart firewalld
+
+- name: Ensure SSH remains open (Management)
+  ansible.posix.firewalld:
+    service: ssh
+    permanent: true
+    state: enabled
+    immediate: true

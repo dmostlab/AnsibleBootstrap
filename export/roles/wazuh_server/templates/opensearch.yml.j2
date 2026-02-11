@@ -1,0 +1,43 @@
+﻿cluster.name: "{{ wazuh_indexer_cluster_name }}"
+node.name: "{{ wazuh_indexer_node_name }}"
+network.host: "{{ wazuh_indexer_network_host }}"
+http.port: {{ wazuh_indexer_http_port }}
+
+# Discovery and Cluster Formation
+discovery.seed_hosts: {{ wazuh_indexer_seed_hosts | to_json }}
+cluster.initial_master_nodes: {{ wazuh_indexer_initial_master_nodes | to_json }}
+
+{% if wazuh_indexer_tls_enabled | bool %}
+# --- Security Plugin Settings ---
+# Admin Distinguished Name (The "Super User" cert identity)
+plugins.security.authcz.admin_dn:
+  - "{{ wazuh_indexer_admin_dn | default('CN=admin,OU=Wazuh,O=Wazuh,L=California,C=US') }}"
+
+# Allowed Node Distinguished Names (Identities allowed to join the cluster)
+plugins.security.nodes_dn:
+  - "CN={{ inventory_hostname }},OU=Wazuh,O=Wazuh,L=California,C=US"
+  - "CN=*,OU=Wazuh,O=Wazuh,L=California,C=US"
+
+# --- SSL/TLS Configuration ---
+
+# REST Layer (HTTP/Browser)
+plugins.security.ssl.http.enabled: {{ wazuh_indexer_http_ssl_enabled | bool | ternary('true', 'false') }}
+plugins.security.ssl.http.pemcert_filepath: "{{ wazuh_indexer_cert_path }}"
+plugins.security.ssl.http.pemkey_filepath: "{{ wazuh_indexer_key_path }}"
+plugins.security.ssl.http.pemtrustedcas_filepath: "{{ wazuh_indexer_ca_path }}"
+
+# Transport Layer (Inter-node communication)
+plugins.security.ssl.transport.enabled: true
+plugins.security.ssl.transport.pemcert_filepath: "{{ wazuh_indexer_transport_cert_path }}"
+plugins.security.ssl.transport.pemkey_filepath: "{{ wazuh_indexer_transport_key_path }}"
+plugins.security.ssl.transport.pemtrustedcas_filepath: "{{ wazuh_indexer_transport_ca_path }}"
+plugins.security.ssl.transport.enforce_hostname_verification: {{ wazuh_indexer_ssl_verify | bool | ternary('true', 'false') }}
+
+{% else %}
+# Security is disabled (Not recommended for production)
+plugins.security.disabled: true
+{% endif %}
+
+# Performance and Storage settings
+path.data: /var/lib/wazuh-indexer
+path.logs: /var/log/wazuh-indexer

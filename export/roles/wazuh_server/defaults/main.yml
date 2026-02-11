@@ -1,0 +1,103 @@
+﻿---
+# --- Repository Configuration ---
+wazuh_manage_repo: true
+wazuh_repo_name: "wazuh"
+wazuh_repo_description: "EL-$releasever - Wazuh"
+wazuh_repo_baseurl: "https://packages.wazuh.com/4.x/yum/"
+wazuh_repo_gpgkey: "https://packages.wazuh.com/key/GPG-KEY-WAZUH"
+wazuh_repo_gpgcheck: true
+wazuh_repo_enabled: true
+wazuh_repo_protect: true
+
+
+# --- Global Automation & FIPS Toggles ---
+wazuh_auto_from_inventory: true
+fips_mode_enabled: true  # Enforces FIPS-specific JVM flags and crypto-policies
+
+
+# --- fapolicyd Security Configuration ---
+wazuh_manage_fapolicyd: true 
+wazuh_manage_fapolicyd_trust: true
+wazuh_fapolicyd_rules:
+  - "allow perm=any all : dir=/usr/share/wazuh-dashboard/node/bin/"
+  - "allow perm=any all : dir=/usr/share/wazuh-dashboard/node/fallback/bin/"
+  - "allow perm=any all : dir=/usr/share/wazuh-indexer/jdk/bin/"
+  - "allow perm=any all : dir=/var/ossec/"
+  - "allow perm=any all : dir=/etc/filebeat/"
+
+# fapolicyd.yml will dynamically append discovered Java paths here
+wazuh_fapolicyd_trust_files:
+  - /usr/share/wazuh-dashboard/node/fallback/bin/node
+
+# --- Indexer / Cluster Architecture ---
+wazuh_indexer_cluster_name: wazuh-cluster
+wazuh_indexer_node_name: "{{ inventory_hostname }}"
+wazuh_indexer_network_host: "{{ ansible_default_ipv4.address | default('0.0.0.0') }}"
+wazuh_indexer_http_port: 9200
+wazuh_indexer_transport_port: 9300
+wazuh_indexer_host_scheme: https
+wazuh_indexer_hosts: [] # Populated dynamically by tasks/main.yml
+
+# --- TLS and Certificate Authority Paths ---
+wazuh_indexer_tls_enabled: true
+wazuh_indexer_ssl_verify: true
+wazuh_dashboard_opensearch_ssl_verification: true
+
+# Centralized certificate paths used by Indexer, Dashboard, and Filebeat
+wazuh_indexer_cert_path: /etc/wazuh-indexer/certs/node.pem
+wazuh_indexer_key_path: /etc/wazuh-indexer/certs/node-key.pem
+wazuh_indexer_ca_path: /etc/wazuh-indexer/certs/root-ca.pem
+
+wazuh_dashboard_cert_path: /etc/wazuh-dashboard/certs/dashboard.pem
+wazuh_dashboard_key_path: /etc/wazuh-dashboard/certs/dashboard-key.pem
+wazuh_dashboard_ca_path: /etc/wazuh-dashboard/certs/root-ca.pem
+
+wazuh_indexer_transport_cert_path: /etc/wazuh-indexer/certs/node.pem
+wazuh_indexer_transport_key_path: /etc/wazuh-indexer/certs/node-key.pem
+wazuh_indexer_transport_ca_path: /etc/wazuh-indexer/certs/root-ca.pem
+
+# --- Manager & API Connectivity ---
+wazuh_manager_api_hosts: [] # Populated dynamically by tasks/main.yml
+wazuh_manager_api_port: 55000
+wazuh_manager_api_protocol: https
+wazuh_manager_api_user: wazuh
+wazuh_manager_api_ssl_verify: true
+
+# --- Filebeat Configuration ---
+wazuh_filebeat_install_module: true
+wazuh_filebeat_enable_module: true
+wazuh_filebeat_module_url: "https://packages.wazuh.com/4.x/filebeat/wazuh-filebeat-0.3.tar.gz"
+wazuh_filebeat_module_packages:
+  - tar
+
+# --- Role Component Toggles ---
+wazuh_install_indexer: false
+wazuh_install_manager: false
+wazuh_install_dashboard: false
+
+# --- Package Definitions ---
+wazuh_indexer_packages: [wazuh-indexer]
+wazuh_manager_packages: [wazuh-manager, filebeat]
+wazuh_dashboard_packages: [wazuh-dashboard, libcap]
+
+# --- Security Credentials (MANDATORY: Use Ansible Vault) ---
+wazuh_indexer_admin_user: admin
+wazuh_indexer_admin_password: "CHANGEME_VAULT_PROTECTED"
+wazuh_manager_api_password: "CHANGEME_VAULT_PROTECTED"
+
+# --- Dashboard Network ---
+wazuh_dashboard_server_host: "{{ ansible_default_ipv4.address | default('0.0.0.0') }}"
+wazuh_dashboard_server_port: 443
+
+# --- Indexer Discovery ---
+# This dynamically creates a list of IPs for the cluster to find each other
+wazuh_indexer_seed_hosts: "{{ groups['wazuh_indexer'] | map('extract', hostvars, ['ansible_default_ipv4', 'address']) | list }}"
+
+# This identifies which nodes are allowed to be cluster managers
+wazuh_indexer_initial_master_nodes: "{{ groups['wazuh_indexer'] }}"
+
+wazuh_indexer_http_ssl_enabled: true
+
+wazuh_domain: "dmostlab.com"
+
+wazuh_indexer_admin_dn: "CN=admin,OU=Wazuh,O=Wazuh,L=California,C=US"

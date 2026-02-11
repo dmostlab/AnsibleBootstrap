@@ -1,0 +1,62 @@
+﻿---
+- name: Install Wazuh manager packages
+  ansible.builtin.package:
+    name: "{{ wazuh_manager_packages }}"
+    state: present
+
+- name: Install Filebeat module dependencies
+  ansible.builtin.package:
+    name: "{{ wazuh_filebeat_module_packages }}"
+    state: present
+  when: wazuh_filebeat_install_module | bool
+
+- name: Ensure Filebeat module directory exists
+  ansible.builtin.file:
+    path: /usr/share/filebeat/module
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: wazuh_filebeat_install_module | bool
+
+- name: Install Wazuh Filebeat module
+  ansible.builtin.unarchive:
+    src: "{{ wazuh_filebeat_module_url }}"
+    dest: /usr/share/filebeat/module
+    remote_src: true
+    creates: /usr/share/filebeat/module/wazuh
+  when: wazuh_filebeat_install_module | bool
+
+- name: Configure Filebeat for Wazuh
+  ansible.builtin.template:
+    src: filebeat.yml.j2
+    dest: /etc/filebeat/filebeat.yml
+    owner: root
+    group: root
+    mode: "0640"
+  notify: restart filebeat
+
+- name: Apply FIPS configuration overrides
+  ansible.builtin.include_tasks: fips.yml
+  when: fips_mode_enabled | bool
+
+# Ensure Filebeat is forced to use system OpenSSL
+- name: Configure Filebeat FIPS environment
+  ansible.builtin.lineinfile:
+    path: /etc/sysconfig/filebeat
+    line: "OPENSSL_FORCE_FIPS_MODE=1"
+    create: true
+    mode: "0644"
+  notify: restart filebeat
+
+- name: Ensure Wazuh manager service is enabled and started
+  ansible.builtin.service:
+    name: wazuh-manager
+    enabled: true
+    state: started
+
+- name: Ensure Filebeat service is enabled and started
+  ansible.builtin.service:
+    name: filebeat
+    enabled: true
+    state: started

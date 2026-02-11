@@ -1,0 +1,59 @@
+﻿---
+- name: Install Wazuh dashboard packages
+  ansible.builtin.package:
+    name: "{{ wazuh_dashboard_packages }}"
+    state: present
+
+- name: Create Dashboard certs directory
+  ansible.builtin.file:
+    path: /etc/wazuh-dashboard/certs
+    state: directory
+    owner: wazuh-dashboard
+    group: wazuh-dashboard
+    mode: '0500'
+
+- name: Copy Certificates from Indexer to Dashboard
+  ansible.builtin.copy:
+    src: "/etc/wazuh-indexer/certs/{{ item.src }}"
+    dest: "{{ item.dest }}"
+    remote_src: yes
+    owner: wazuh-dashboard
+    group: wazuh-dashboard
+    mode: '0400'
+  loop:
+    - { src: 'node.pem', dest: "{{ wazuh_dashboard_cert_path }}" }
+    - { src: 'node-key.pem', dest: "{{ wazuh_dashboard_key_path }}" }
+    - { src: 'root-ca.pem', dest: "{{ wazuh_dashboard_ca_path }}" }
+
+- name: Configure Wazuh dashboard OpenSearch connection
+  ansible.builtin.template:
+    src: opensearch_dashboards.yml.j2
+    dest: /etc/wazuh-dashboard/opensearch_dashboards.yml
+    owner: wazuh-dashboard
+    group: wazuh-dashboard
+    mode: "0640"
+  notify: restart wazuh-dashboard
+
+- name: Configure Wazuh dashboard API connection directory
+  ansible.builtin.file:
+    path: /usr/share/wazuh-dashboard/data/wazuh/config
+    state: directory
+    owner: wazuh-dashboard
+    group: wazuh-dashboard
+    mode: "0750"
+
+- name: Configure Wazuh dashboard API connection template
+  ansible.builtin.template:
+    src: wazuh.yml.j2
+    dest: /usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml
+    # CHANGE THESE FROM ROOT TO WAZUH-DASHBOARD
+    owner: wazuh-dashboard
+    group: wazuh-dashboard
+    mode: "0640"
+  notify: restart wazuh-dashboard
+
+- name: Ensure Wazuh dashboard service is enabled and started
+  ansible.builtin.service:
+    name: wazuh-dashboard
+    enabled: true
+    state: started
