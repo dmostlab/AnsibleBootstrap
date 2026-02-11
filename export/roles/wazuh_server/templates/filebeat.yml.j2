@@ -1,0 +1,20 @@
+{% if wazuh_filebeat_enable_module | bool %}
+filebeat.modules:
+  - module: wazuh
+    alerts:
+      enabled: true
+    archives:
+      enabled: false
+{% endif %}
+
+setup.template.enabled: false
+setup.ilm.enabled: false
+
+output.elasticsearch:
+  hosts: {{ wazuh_indexer_hosts | to_json }}
+  username: "{{ wazuh_indexer_admin_user }}"
+  password: "{{ wazuh_indexer_admin_password }}"
+  ssl.verification_mode: "{{ 'full' if wazuh_indexer_ssl_verify else 'certificate' }}"
+  # Add these for FIPS alignment
+  ssl.certificate_authorities: ["{{ wazuh_indexer_ca_path }}"]
+  ssl.supported_protocols: [TLSv1.2, TLSv1.3]

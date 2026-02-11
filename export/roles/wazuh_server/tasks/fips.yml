@@ -1,0 +1,22 @@
+---
+- name: Verify FIPS mode is enabled on host
+  ansible.builtin.command: fips-mode-setup --check
+  register: fips_check
+  changed_when: false
+  failed_when: "'FIPS mode is enabled' not in fips_check.stdout"
+
+- name: Configure Wazuh Indexer for FIPS (Java)
+  ansible.builtin.lineinfile:
+    path: /etc/wazuh-indexer/jvm.options
+    line: "{{ item }}"
+    state: present
+  loop:
+    - "-Dcom.redhat.fips=true"
+    - "-Djava.security.properties=/etc/crypto-policies/back-ends/java.config"
+  when: wazuh_install_indexer | bool
+  notify: restart wazuh-indexer
+
+- name: Force system-wide crypto policy
+  ansible.builtin.command: update-crypto-policies --set FIPS
+  register: crypto_policy_result
+  changed_when: "'Setting system-wide crypto policy to FIPS' in crypto_policy_result.stdout"

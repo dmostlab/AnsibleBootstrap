@@ -1,0 +1,18 @@
+wazuh_install_indexer: true
+wazuh_install_manager: true
+wazuh_install_dashboard: true
+wazuh_indexer_hosts:
+  - https://wazuh-1.dmostlab.com:9200
+wazuh_manager_api_hosts:
+  - wazuh-1.dmostlab.com
+
+wazuh_manage_fapolicyd: true
+wazuh_indexer_admin_password: "password"
+wazuh_manager_api_password: "password"
+
+
+wazuh_indexer_ssl_verify: false
+
+wazuh_manager_api_ssl_verify: false
+
+wazuh_dashboard_opensearch_ssl_verification: false

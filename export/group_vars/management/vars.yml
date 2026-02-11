@@ -1,0 +1,7 @@
+# In roles/foreman_katello/vars/main.yml
+foreman_admin_password: "{{ vault_foreman_admin_password }}"
+
+# group_vars/all.yml (or host_vars/rocky-target-01.yml)
+# group_vars/all.yml
+ansible_remote_tmp: /tmp/.ansible-${USER}/tmp
+

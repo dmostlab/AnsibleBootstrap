@@ -1,0 +1,46 @@
+﻿---
+- name: Install Wazuh indexer packages
+  ansible.builtin.package:
+    name: "{{ wazuh_indexer_packages }}"
+    state: present
+
+- name: Configure Wazuh indexer
+  ansible.builtin.template:
+    src: opensearch.yml.j2
+    dest: /etc/wazuh-indexer/opensearch.yml
+    owner: wazuh-indexer
+    group: wazuh-indexer
+    mode: "0640"
+  notify: restart wazuh-indexer
+
+- name: Create certificate directory
+  ansible.builtin.file:
+    path: "{{ wazuh_indexer_cert_path | dirname }}"
+    state: directory
+    owner: wazuh-indexer
+    group: wazuh-indexer
+    mode: "0750"
+
+- name: Deploy Wazuh indexer and admin certificates
+  ansible.builtin.copy:
+    src: "wazuh-certificates/{{ item.file }}"
+    dest: "{{ item.dest }}"
+    owner: wazuh-indexer
+    group: wazuh-indexer
+    mode: "{{ item.mode }}"
+    setype: cert_t 
+  loop:
+    - { file: "{{ inventory_hostname }}.pem", dest: "{{ wazuh_indexer_cert_path }}", mode: '0644' }
+    - { file: "{{ inventory_hostname }}-key.pem", dest: "{{ wazuh_indexer_key_path }}", mode: '0600' }
+    - { file: 'root-ca.pem', dest: "{{ wazuh_indexer_ca_path }}", mode: '0644' }
+    # --- ADD THE ADMIN CERTS HERE ---
+    - { file: 'admin.pem', dest: '/etc/wazuh-indexer/certs/admin.pem', mode: '0644' }
+    - { file: 'admin-key.pem', dest: '/etc/wazuh-indexer/certs/admin-key.pem', mode: '0600' }
+  when: wazuh_indexer_tls_enabled | bool
+  notify: restart wazuh-indexer
+
+- name: Ensure Wazuh indexer service is enabled and started
+  ansible.builtin.service:
+    name: wazuh-indexer
+    enabled: true
+    state: started
