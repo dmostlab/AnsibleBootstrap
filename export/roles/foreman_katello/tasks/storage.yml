@@ -1,0 +1,25 @@
+- name: Ensure LVM group exists
+  community.general.lvg:
+    vg: "{{ foreman_pulp_vg }}"
+    pvs: "{{ foreman_pulp_pvs }}"
+
+- name: Create Logical Volume for Pulp
+  community.general.lvol:
+    vg: "{{ foreman_pulp_vg }}"
+    lv: "{{ foreman_pulp_lv }}"
+    size: "{{ foreman_pulp_size }}"
+    shrink: no
+    force: no
+
+- name: Create XFS filesystem on Pulp LV
+  community.general.filesystem:
+    fstype: xfs
+    dev: "/dev/{{ foreman_pulp_vg }}/{{ foreman_pulp_lv }}"
+
+- name: Mount Pulp Storage
+  ansible.posix.mount:
+    path: "{{ foreman_pulp_mount }}"
+    src: "/dev/{{ foreman_pulp_vg }}/{{ foreman_pulp_lv }}"
+    fstype: xfs
+    opts: noatime
+    state: mounted

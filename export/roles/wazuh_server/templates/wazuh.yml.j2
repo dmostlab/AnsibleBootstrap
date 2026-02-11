@@ -1,0 +1,11 @@
+﻿hosts:
+{% for host in wazuh_manager_api_hosts %}
+  - default:
+      url: "{{ wazuh_manager_api_protocol }}://{{ host }}"
+      port: {{ wazuh_manager_api_port }}
+      username: "{{ wazuh_manager_api_user }}"
+      password: "{{ wazuh_manager_api_password }}"
+      run_as: false
+      ssl:
+        verification_mode: "{{ 'full' if wazuh_manager_api_ssl_verify else 'certificate' }}"
+{% endfor %}

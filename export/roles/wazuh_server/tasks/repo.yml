@@ -1,0 +1,10 @@
+﻿---
+- name: Add Wazuh yum repository
+  ansible.builtin.yum_repository:
+    name: "{{ wazuh_repo_name }}"
+    description: "{{ wazuh_repo_description }}"
+    baseurl: "{{ wazuh_repo_baseurl }}"
+    gpgkey: "{{ wazuh_repo_gpgkey }}"
+    gpgcheck: "{{ wazuh_repo_gpgcheck }}"
+    enabled: "{{ wazuh_repo_enabled }}"
+    protect: "{{ wazuh_repo_protect }}"

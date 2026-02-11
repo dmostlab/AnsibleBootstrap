@@ -1,0 +1,12 @@
+﻿---
+galaxy_info:
+  role_name: wazuh_server
+  author: your_name
+  description: Install Wazuh indexer, manager, and dashboard on Rocky Linux.
+  license: MIT
+  min_ansible_version: "2.12"
+  platforms:
+    - name: EL
+      versions:
+        - "8"
+        - "9"
