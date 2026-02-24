@@ -1,0 +1,17 @@
+---
+gitlab_edition: 'community'
+
+
+# Firewall Overrides
+gitlab_required_ports:
+  - { port: '443', proto: 'tcp', comment: 'HTTPS' }
+  - { port: '80', proto: 'tcp', comment: 'HTTP' }
+
+# fapolicyd settings
+fapolicyd_setup_trust: "rpmdb,file"
+fapolicyd_setup_integrity: "sha256"
+
+# The specific rules GitLab needs
+gitlab_fapolicyd_rules: |
+  allow perm=any all : dir=/opt/gitlab/
+  allow perm=any all : dir=/var/opt/gitlab/

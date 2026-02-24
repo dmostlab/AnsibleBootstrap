@@ -1,0 +1,4 @@
+- name: Restart Wazuh dashboard
+  ansible.builtin.systemd:
+    name: "{{ wazuh_dashboard_service_name }}"
+    state: restarted

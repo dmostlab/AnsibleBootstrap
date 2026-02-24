@@ -1,0 +1,481 @@
+- name: Ensure tar is installed (needed for cert bundle)
+  ansible.builtin.package:
+    name: tar
+    state: present
+  when: wazuh_indexer_generate_certs | bool
+
+- name: Download Wazuh cert tool script
+  ansible.builtin.get_url:
+    url: "{{ wazuh_indexer_cert_tool_url }}"
+    dest: "{{ wazuh_indexer_cert_tool_path }}"
+    mode: "0755"
+  when: wazuh_indexer_generate_certs | bool
+
+- name: Download Wazuh cert tool default config
+  ansible.builtin.get_url:
+    url: "{{ wazuh_indexer_cert_config_url }}"
+    dest: "{{ wazuh_indexer_cert_config_path }}"
+    mode: "0644"
+  when: wazuh_indexer_generate_certs | bool
+
+- name: Render Wazuh cert config
+  ansible.builtin.template:
+    src: config.yml.j2
+    dest: "{{ wazuh_indexer_cert_config_path }}"
+    mode: "0644"
+  when: wazuh_indexer_generate_certs | bool
+
+- name: Check Wazuh certificates output directory
+  ansible.builtin.stat:
+    path: "{{ wazuh_indexer_cert_output_dir }}"
+  register: wazuh_indexer_cert_output_stat
+  when: wazuh_indexer_generate_certs | bool
+
+- name: Remove Wazuh certificates output directory (regenerate)
+  ansible.builtin.file:
+    path: "{{ wazuh_indexer_cert_output_dir }}"
+    state: absent
+  when:
+    - wazuh_indexer_generate_certs | bool
+    - wazuh_indexer_cert_regen | bool
+    - wazuh_indexer_cert_output_stat.stat.exists | default(false)
+
+- name: Generate Wazuh certificates
+  ansible.builtin.command: >
+    {{ wazuh_indexer_cert_tool_path }} -A
+  args:
+    chdir: "{{ wazuh_indexer_certificates_workdir }}"
+  when:
+    - wazuh_indexer_generate_certs | bool
+    - wazuh_indexer_cert_regen | bool
+      or not (wazuh_indexer_cert_output_stat.stat.exists | default(false))
+
+- name: Check Wazuh certificates tarball
+  ansible.builtin.stat:
+    path: "{{ wazuh_indexer_certificates_tar_path }}"
+  register: wazuh_indexer_cert_tar_gen_stat
+  when: wazuh_indexer_generate_certs | bool
+
+- name: Create Wazuh certificates tarball
+  ansible.builtin.command: >
+    tar -cvf {{ wazuh_indexer_certificates_tar_path }}
+    -C {{ wazuh_indexer_certificates_workdir }}
+    wazuh-certificates/
+  when:
+    - wazuh_indexer_generate_certs | bool
+    - wazuh_indexer_cert_regen | bool
+      or not (wazuh_indexer_cert_tar_gen_stat.stat.exists | default(false))
+
+- name: Remove Wazuh certificates directory
+  ansible.builtin.file:
+    path: "{{ wazuh_indexer_cert_output_dir }}"
+    state: absent
+  when:
+    - wazuh_indexer_generate_certs | bool
+    - wazuh_indexer_cert_cleanup | bool
+    - wazuh_indexer_cert_regen | bool
+
+- name: Fetch Wazuh certificates tarball to controller
+  ansible.builtin.fetch:
+    src: "{{ wazuh_indexer_certificates_tar_path }}"
+    dest: "{{ wazuh_indexer_certificates_fetch_dest }}/wazuh-certificates.tar"
+    flat: true
+  when:
+    - wazuh_indexer_generate_certs | bool
+    - wazuh_indexer_distribute_certs | bool
+  run_once: true
+
+- name: Install Wazuh indexer dependencies (APT)
+  ansible.builtin.apt:
+    name: "{{ wazuh_indexer_pkg_deps_apt }}"
+    state: present
+    update_cache: true
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Install Wazuh indexer dependencies (RPM)
+  ansible.builtin.package:
+    name: "{{ wazuh_indexer_pkg_deps_rpm }}"
+    state: present
+  when: ansible_facts['os_family'] == "RedHat"
+
+- name: Install SELinux tooling (RPM)
+  ansible.builtin.package:
+    name: policycoreutils-python-utils
+    state: present
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - wazuh_indexer_selinux_manage | bool
+
+- name: Download Wazuh GPG key (APT)
+  ansible.builtin.get_url:
+    url: "{{ wazuh_indexer_gpg_key_url }}"
+    dest: /tmp/GPG-KEY-WAZUH
+    mode: "0644"
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Import Wazuh GPG key (APT)
+  ansible.builtin.command: >
+    gpg --no-default-keyring --keyring gnupg-ring:/usr/share/keyrings/wazuh.gpg --import /tmp/GPG-KEY-WAZUH
+  args:
+    creates: /usr/share/keyrings/wazuh.gpg
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Ensure Wazuh keyring permissions (APT)
+  ansible.builtin.file:
+    path: /usr/share/keyrings/wazuh.gpg
+    mode: "0644"
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Add Wazuh repository (APT)
+  ansible.builtin.apt_repository:
+    repo: "{{ wazuh_indexer_repo_apt }}"
+    filename: wazuh
+    state: present
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Update APT cache after adding Wazuh repository
+  ansible.builtin.apt:
+    update_cache: true
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Add Wazuh repository (RPM)
+  ansible.builtin.template:
+    src: wazuh.repo.j2
+    dest: /etc/yum.repos.d/wazuh.repo
+    mode: "0644"
+  when: ansible_facts['os_family'] == "RedHat"
+
+- name: Import Wazuh GPG key (RPM)
+  ansible.builtin.rpm_key:
+    key: "{{ wazuh_indexer_repo_rpm_gpgkey }}"
+    state: present
+  when: ansible_facts['os_family'] == "RedHat"
+
+- name: Install Wazuh indexer package
+  ansible.builtin.package:
+    name: "{{ wazuh_indexer_package_name }}"
+    state: present
+
+- name: Check for FIPS installer
+  ansible.builtin.stat:
+    path: "{{ wazuh_indexer_fips_installer_path }}"
+  register: wazuh_indexer_fips_installer_stat
+  when: wazuh_indexer_fips_enable | bool
+
+- name: Warn if FIPS installer is missing
+  ansible.builtin.debug:
+    msg: "FIPS is enabled but the installer was not found at {{ wazuh_indexer_fips_installer_path }}. Skipping FIPS app installer."
+  when:
+    - wazuh_indexer_fips_enable | bool
+    - not wazuh_indexer_fips_installer_stat.stat.exists | default(false)
+
+- name: Run FIPS installer (generated password)
+  ansible.builtin.command: >
+    {{ wazuh_indexer_fips_installer_path }}
+    --mode {{ wazuh_indexer_fips_installer_mode }}
+    {% if wazuh_indexer_fips_installer_force | bool %}-f{% endif %}
+  args:
+    creates: /etc/wazuh-indexer/opensearch-security/fips-keystore.jks
+  when:
+    - wazuh_indexer_fips_enable | bool
+    - wazuh_indexer_fips_installer_password | length == 0
+    - wazuh_indexer_fips_installer_stat.stat.exists | default(false)
+
+- name: Run FIPS installer (provided password)
+  ansible.builtin.command: >
+    {{ wazuh_indexer_fips_installer_path }}
+    --mode {{ wazuh_indexer_fips_installer_mode }}
+    --password "{{ wazuh_indexer_fips_installer_password }}"
+    {% if wazuh_indexer_fips_installer_force | bool %}-f{% endif %}
+  no_log: true
+  args:
+    creates: /etc/wazuh-indexer/opensearch-security/fips-keystore.jks
+  when:
+    - wazuh_indexer_fips_enable | bool
+    - wazuh_indexer_fips_installer_password | length > 0
+    - wazuh_indexer_fips_installer_stat.stat.exists | default(false)
+
+- name: Remove existing indexer settings to avoid duplicates
+  ansible.builtin.replace:
+    path: /etc/wazuh-indexer/opensearch.yml
+    regexp: '(?m)^network\.host:.*$'
+    replace: ''
+  notify: Restart Wazuh indexer
+
+- name: Remove existing node name setting
+  ansible.builtin.replace:
+    path: /etc/wazuh-indexer/opensearch.yml
+    regexp: '(?m)^node\.name:.*$'
+    replace: ''
+  notify: Restart Wazuh indexer
+
+- name: Remove existing cluster initial master nodes
+  ansible.builtin.replace:
+    path: /etc/wazuh-indexer/opensearch.yml
+    regexp: '(?ms)^cluster\.initial_master_nodes:\s*$\n(?:\s+-.*\n?)*'
+    replace: ''
+  notify: Restart Wazuh indexer
+
+- name: Remove existing discovery seed hosts
+  ansible.builtin.replace:
+    path: /etc/wazuh-indexer/opensearch.yml
+    regexp: '(?ms)^discovery\.seed_hosts:\s*$\n(?:\s+-.*\n?)*'
+    replace: ''
+  notify: Restart Wazuh indexer
+
+- name: Remove existing security nodes DNs
+  ansible.builtin.replace:
+    path: /etc/wazuh-indexer/opensearch.yml
+    regexp: '(?ms)^plugins\.security\.nodes_dn:\s*$\n(?:\s+-.*\n?)*'
+    replace: ''
+  notify: Restart Wazuh indexer
+
+- name: Remove orphaned node list items
+  ansible.builtin.replace:
+    path: /etc/wazuh-indexer/opensearch.yml
+    regexp: '(?m)^\s*-\s*"(node-|CN=node-).*$'
+    replace: ''
+  notify: Restart Wazuh indexer
+
+- name: Configure Wazuh indexer settings
+  ansible.builtin.blockinfile:
+    path: /etc/wazuh-indexer/opensearch.yml
+    marker: "# {mark} ANSIBLE WAZUH INDEXER"
+    insertbefore: EOF
+    block: "{{ lookup('template', 'opensearch.yml.block.j2') }}"
+  notify: Restart Wazuh indexer
+
+- name: Ensure certificates directory exists
+  ansible.builtin.file:
+    path: /etc/wazuh-indexer/certs
+    state: directory
+    owner: wazuh-indexer
+    group: wazuh-indexer
+    mode: "0500"
+  when: wazuh_indexer_manage_certificates | bool
+
+- name: Copy Wazuh certificates tarball
+  ansible.builtin.copy:
+    src: "{{ wazuh_indexer_certificates_tar_src }}"
+    dest: "{{ wazuh_indexer_certificates_tar_path }}"
+    mode: "0600"
+  when:
+    - wazuh_indexer_manage_certificates | bool
+    - wazuh_indexer_certificates_tar_src | length > 0
+    - not wazuh_indexer_generate_certs | bool
+
+- name: Check for Wazuh certificates tarball
+  ansible.builtin.stat:
+    path: "{{ wazuh_indexer_certificates_tar_path }}"
+  register: wazuh_indexer_cert_tar_stat
+  when: wazuh_indexer_manage_certificates | bool
+
+- name: Extract Wazuh indexer certificates
+  ansible.builtin.command: >
+    tar -xf {{ wazuh_indexer_certificates_tar_path }}
+    -C /etc/wazuh-indexer/certs/
+    --strip-components=1
+    wazuh-certificates/{{ wazuh_indexer_node_name }}.pem
+    wazuh-certificates/{{ wazuh_indexer_node_name }}-key.pem
+    wazuh-certificates/admin.pem
+    wazuh-certificates/admin-key.pem
+    wazuh-certificates/root-ca.pem
+  args:
+    creates: /etc/wazuh-indexer/certs/indexer.pem
+  when:
+    - wazuh_indexer_manage_certificates | bool
+    - wazuh_indexer_cert_tar_stat.stat.exists | default(false)
+  notify: Restart Wazuh indexer
+
+- name: Rename Wazuh indexer certificates
+  ansible.builtin.command: >
+    mv -n /etc/wazuh-indexer/certs/{{ wazuh_indexer_node_name }}.pem /etc/wazuh-indexer/certs/indexer.pem
+  args:
+    creates: /etc/wazuh-indexer/certs/indexer.pem
+  when:
+    - wazuh_indexer_manage_certificates | bool
+    - wazuh_indexer_cert_tar_stat.stat.exists | default(false)
+  notify: Restart Wazuh indexer
+
+- name: Rename Wazuh indexer key
+  ansible.builtin.command: >
+    mv -n /etc/wazuh-indexer/certs/{{ wazuh_indexer_node_name }}-key.pem /etc/wazuh-indexer/certs/indexer-key.pem
+  args:
+    creates: /etc/wazuh-indexer/certs/indexer-key.pem
+  when:
+    - wazuh_indexer_manage_certificates | bool
+    - wazuh_indexer_cert_tar_stat.stat.exists | default(false)
+  notify: Restart Wazuh indexer
+
+- name: Set certificate permissions
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: wazuh-indexer
+    group: wazuh-indexer
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /etc/wazuh-indexer/certs/indexer.pem, mode: "0400" }
+    - { path: /etc/wazuh-indexer/certs/indexer-key.pem, mode: "0400" }
+    - { path: /etc/wazuh-indexer/certs/admin.pem, mode: "0400" }
+    - { path: /etc/wazuh-indexer/certs/admin-key.pem, mode: "0400" }
+    - { path: /etc/wazuh-indexer/certs/root-ca.pem, mode: "0400" }
+  when:
+    - wazuh_indexer_manage_certificates | bool
+    - wazuh_indexer_cert_tar_stat.stat.exists | default(false)
+  notify: Restart Wazuh indexer
+
+- name: Check Wazuh indexer paths for restorecon
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ wazuh_indexer_selinux_restorecon_paths }}"
+  register: wazuh_indexer_selinux_restorecon_stats
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - wazuh_indexer_selinux_manage | bool
+
+- name: Restore SELinux contexts for Wazuh indexer paths
+  ansible.builtin.command: >
+    restorecon -Rv {{ item.item }}
+  loop: "{{ wazuh_indexer_selinux_restorecon_stats.results }}"
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - wazuh_indexer_selinux_manage | bool
+    - item.stat.exists | default(false)
+
+- name: Install fapolicyd rules for Wazuh indexer
+  ansible.builtin.template:
+    src: fapolicyd.rules.j2
+    dest: "{{ wazuh_indexer_fapolicyd_rule_path }}"
+    mode: "0644"
+  register: wazuh_indexer_fapolicyd_rules
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - wazuh_indexer_fapolicyd_manage | bool
+
+- name: Reload fapolicyd rules
+  ansible.builtin.command: fagenrules --load
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - wazuh_indexer_fapolicyd_manage | bool
+    - wazuh_indexer_fapolicyd_rules is changed
+
+- name: Remove certificates tarball
+  ansible.builtin.file:
+    path: "{{ wazuh_indexer_certificates_tar_path }}"
+    state: absent
+  when:
+    - wazuh_indexer_manage_certificates | bool
+    - wazuh_indexer_remove_cert_tar | bool
+
+- name: Enable and start Wazuh indexer service
+  ansible.builtin.systemd:
+    name: "{{ wazuh_indexer_service_name }}"
+    enabled: true
+    state: started
+
+# - name: Check for Wazuh indexer security init script
+#   ansible.builtin.stat:
+#     path: /usr/share/wazuh-indexer/bin/indexer-security-init.sh
+#   register: wazuh_indexer_security_init_stat
+#   when: wazuh_indexer_run_security_init | bool
+
+# - name: Check for runuser binary
+#   ansible.builtin.command: /usr/bin/command -v runuser
+#   register: wazuh_indexer_runuser_check
+#   changed_when: false
+#   failed_when: false
+#   when: wazuh_indexer_run_security_init | bool
+
+# - name: Warn if security init script is missing
+#   ansible.builtin.debug:
+#     msg: "Security init script not found at /usr/share/wazuh-indexer/bin/indexer-security-init.sh. Skipping."
+#   when:
+#     - wazuh_indexer_run_security_init | bool
+#     - not wazuh_indexer_security_init_stat.stat.exists | default(false)
+
+# - name: Manual security initialization notice
+#   ansible.builtin.debug:
+#     msg:
+#       - "Manual action required: run the following on the indexer host:"
+#       - "sudo /bin/bash /usr/share/wazuh-indexer/bin/indexer-security-init.sh"
+#   when:
+#     - wazuh_indexer_run_security_init | bool
+#     - wazuh_indexer_security_init_manual | bool
+
+# - name: Run Wazuh indexer security initialization
+#   ansible.builtin.command: /bin/bash /usr/share/wazuh-indexer/bin/indexer-security-init.sh
+#   environment:
+#     PATH: "/usr/sbin:/usr/bin:/sbin:/bin"
+#   args:
+#     creates: /var/lib/wazuh-indexer/.security-init-done
+#   register: wazuh_indexer_security_init_result
+#   changed_when: wazuh_indexer_security_init_result.rc == 0
+#   failed_when: false
+#   when:
+#     - wazuh_indexer_run_security_init | bool
+#     - wazuh_indexer_security_init_stat.stat.exists | default(false)
+#     - not wazuh_indexer_security_init_manual | bool
+
+# - name: Alert to run manual security initialization on failure
+#   ansible.builtin.fail:
+#     msg: "Security initialization failed. Set wazuh_indexer_security_init_manual: true and run: sudo /bin/bash /usr/share/wazuh-indexer/bin/indexer-security-init.sh"
+#   when:
+#     - wazuh_indexer_run_security_init | bool
+#     - wazuh_indexer_security_init_stat.stat.exists | default(false)
+#     - not wazuh_indexer_security_init_manual | bool
+#     - (wazuh_indexer_security_init_result is defined and wazuh_indexer_security_init_result.rc != 0)
+
+# - name: Mark Wazuh indexer security initialization
+#   ansible.builtin.file:
+#     path: /var/lib/wazuh-indexer/.security-init-done
+#     state: touch
+#     mode: "0644"
+#   when:
+#     - wazuh_indexer_run_security_init | bool
+#     - wazuh_indexer_security_init_result is changed
+
+- name: Disable Wazuh repository after install (APT)
+  ansible.builtin.apt_repository:
+    repo: "{{ wazuh_indexer_repo_apt }}"
+    filename: wazuh
+    state: absent
+  when:
+    - ansible_facts['os_family'] == "Debian"
+    - wazuh_indexer_disable_repo_after_install | bool
+
+- name: Disable Wazuh repository after install (RPM)
+  ansible.builtin.lineinfile:
+    path: /etc/yum.repos.d/wazuh.repo
+    regexp: '^enabled='
+    line: 'enabled=0'
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - wazuh_indexer_disable_repo_after_install | bool
+
+- name: Ensure firewalld is installed (RPM)
+  ansible.builtin.package:
+    name: firewalld
+    state: present
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - (wazuh_indexer_firewalld_manage | default(true)) | bool
+
+- name: Ensure firewalld is running (RPM)
+  ansible.builtin.systemd:
+    name: firewalld
+    enabled: true
+    state: started
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - (wazuh_indexer_firewalld_manage | default(true)) | bool
+
+- name: Open Wazuh indexer firewall ports
+  ansible.posix.firewalld:
+    port: "{{ item }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ wazuh_indexer_firewalld_ports }}"
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - (wazuh_indexer_firewalld_manage | default(true)) | bool

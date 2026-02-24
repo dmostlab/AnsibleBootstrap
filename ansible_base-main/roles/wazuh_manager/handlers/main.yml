@@ -1,0 +1,9 @@
+- name: Restart Wazuh manager
+  ansible.builtin.systemd:
+    name: "{{ wazuh_manager_service_name }}"
+    state: restarted
+
+- name: Restart Filebeat
+  ansible.builtin.systemd:
+    name: "{{ wazuh_manager_filebeat_service_name }}"
+    state: restarted

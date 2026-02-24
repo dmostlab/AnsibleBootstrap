@@ -1,0 +1,9 @@
+wazuh_manager_pkg_deps_apt:
+  - debconf
+  - adduser
+  - procps
+  - gnupg
+  - apt-transport-https
+
+wazuh_manager_pkg_deps_rpm:
+  - coreutils

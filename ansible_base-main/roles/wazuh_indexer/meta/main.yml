@@ -1,0 +1,6 @@
+galaxy_info:
+  role_name: wazuh_indexer
+  author: codex
+  description: Install and configure Wazuh Indexer
+  min_ansible_version: "2.12"
+  license: MIT

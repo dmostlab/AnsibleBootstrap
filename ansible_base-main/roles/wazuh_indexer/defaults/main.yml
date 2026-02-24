@@ -1,0 +1,81 @@
+wazuh_indexer_manage_certificates: true
+wazuh_single_node: true
+wazuh_indexer_generate_certs: true
+wazuh_indexer_distribute_certs: false
+wazuh_indexer_certificates_fetch_dest: "/tmp/wazuh-certs"
+wazuh_certificates_tar_src: ""
+wazuh_indexer_certificates_workdir: "/root"
+wazuh_indexer_certificates_tar_path: "{{ wazuh_indexer_certificates_workdir }}/wazuh-certificates.tar"
+wazuh_indexer_certificates_tar_src: "{{ wazuh_indexer_distribute_certs | bool | ternary(wazuh_indexer_certificates_fetch_dest ~ '/wazuh-certificates.tar', wazuh_certificates_tar_src) }}"
+wazuh_indexer_remove_cert_tar: false
+
+wazuh_indexer_cert_tool_url: "https://packages.wazuh.com/4.14/wazuh-certs-tool.sh"
+wazuh_indexer_cert_config_url: "https://packages.wazuh.com/4.14/config.yml"
+wazuh_indexer_cert_tool_path: "{{ wazuh_indexer_certificates_workdir }}/wazuh-certs-tool.sh"
+wazuh_indexer_cert_config_path: "{{ wazuh_indexer_certificates_workdir }}/config.yml"
+wazuh_indexer_cert_output_dir: "{{ wazuh_indexer_certificates_workdir }}/wazuh-certificates"
+wazuh_indexer_cert_cleanup: false
+wazuh_indexer_cert_regen: false
+
+wazuh_indexer_node_ip: "{{ ansible_default_ipv4.address | default('127.0.0.1') }}"
+wazuh_manager_node_name: "wazuh-1"
+wazuh_manager_node_ip: "{{ ansible_default_ipv4.address | default('127.0.0.1') }}"
+wazuh_dashboard_node_name: "dashboard"
+wazuh_dashboard_node_ip: "{{ ansible_default_ipv4.address | default('127.0.0.1') }}"
+
+wazuh_indexer_certs_indexer_nodes:
+  - name: "{{ wazuh_indexer_node_name }}"
+    ip: "{{ wazuh_indexer_node_ip }}"
+wazuh_indexer_certs_server_nodes:
+  - name: "{{ wazuh_manager_node_name }}"
+    ip: "{{ wazuh_manager_node_ip }}"
+    node_type: "master"
+wazuh_indexer_certs_dashboard_nodes:
+  - name: "{{ wazuh_dashboard_node_name }}"
+    ip: "{{ wazuh_dashboard_node_ip }}"
+
+wazuh_indexer_node_name: "node-1"
+wazuh_indexer_network_host: "0.0.0.0"
+wazuh_indexer_cluster_initial_master_nodes:
+  - "node-1"
+wazuh_indexer_discovery_seed_hosts: []
+wazuh_indexer_nodes_dn:
+  - "CN=node-1,OU=Wazuh,O=Wazuh,L=California,C=US"
+
+wazuh_indexer_run_security_init: true
+wazuh_indexer_security_init_manual: false
+wazuh_indexer_disable_repo_after_install: true
+
+wazuh_fips_enabled: true
+wazuh_indexer_fips_enable: "{{ wazuh_fips_enabled }}"
+wazuh_indexer_fips_installer_path: "/usr/share/wazuh-indexer/bin/opensearch-fips-demo-installer"
+wazuh_indexer_fips_installer_mode: "generated"
+wazuh_indexer_fips_installer_force: false
+wazuh_indexer_fips_installer_password: ""
+
+wazuh_indexer_selinux_manage: true
+wazuh_indexer_selinux_restorecon_paths:
+  - /etc/wazuh-indexer
+  - /var/lib/wazuh-indexer
+  - /var/log/wazuh-indexer
+
+wazuh_indexer_fapolicyd_manage: true
+wazuh_indexer_fapolicyd_rule_path: "/etc/fapolicyd/rules.d/80-wazuh-indexer.rules"
+wazuh_indexer_fapolicyd_allow_dirs: []
+wazuh_indexer_fapolicyd_allow_paths:
+  - /usr/share/wazuh-indexer/jdk/bin/java
+  - /usr/share/wazuh-indexer/plugins/opensearch-security/tools/securityadmin.sh
+
+wazuh_indexer_firewalld_manage: true
+wazuh_indexer_firewalld_ports:
+  - "9200/tcp"
+  - "9300/tcp"
+
+wazuh_indexer_gpg_key_url: "https://packages.wazuh.com/key/GPG-KEY-WAZUH"
+wazuh_indexer_repo_apt: "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main"
+wazuh_indexer_repo_rpm_baseurl: "https://packages.wazuh.com/4.x/yum/"
+wazuh_indexer_repo_rpm_gpgkey: "https://packages.wazuh.com/key/GPG-KEY-WAZUH"
+wazuh_indexer_repo_rpm_name: "wazuh"
+
+wazuh_indexer_package_name: "wazuh-indexer"
+wazuh_indexer_service_name: "wazuh-indexer"

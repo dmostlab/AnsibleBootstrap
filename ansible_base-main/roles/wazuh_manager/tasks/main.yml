@@ -1,0 +1,398 @@
+- name: Install Wazuh manager dependencies (APT)
+  ansible.builtin.apt:
+    name: "{{ wazuh_manager_pkg_deps_apt }}"
+    state: present
+    update_cache: true
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Install Wazuh manager dependencies (RPM)
+  ansible.builtin.package:
+    name: "{{ wazuh_manager_pkg_deps_rpm }}"
+    state: present
+  when: ansible_facts['os_family'] == "RedHat"
+
+- name: Install SELinux tooling (RPM)
+  ansible.builtin.package:
+    name: policycoreutils-python-utils
+    state: present
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - wazuh_manager_selinux_manage | bool
+
+- name: Download Wazuh GPG key (APT)
+  ansible.builtin.get_url:
+    url: "{{ wazuh_manager_gpg_key_url }}"
+    dest: /tmp/GPG-KEY-WAZUH
+    mode: "0644"
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Import Wazuh GPG key (APT)
+  ansible.builtin.command: >
+    gpg --no-default-keyring --keyring gnupg-ring:/usr/share/keyrings/wazuh.gpg --import /tmp/GPG-KEY-WAZUH
+  args:
+    creates: /usr/share/keyrings/wazuh.gpg
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Ensure Wazuh keyring permissions (APT)
+  ansible.builtin.file:
+    path: /usr/share/keyrings/wazuh.gpg
+    mode: "0644"
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Add Wazuh repository (APT)
+  ansible.builtin.apt_repository:
+    repo: "{{ wazuh_manager_repo_apt }}"
+    filename: wazuh
+    state: present
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Update APT cache after adding Wazuh repository
+  ansible.builtin.apt:
+    update_cache: true
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Add Wazuh repository (RPM)
+  ansible.builtin.template:
+    src: wazuh.repo.j2
+    dest: /etc/yum.repos.d/wazuh.repo
+    mode: "0644"
+  when: ansible_facts['os_family'] == "RedHat"
+
+- name: Import Wazuh GPG key (RPM)
+  ansible.builtin.rpm_key:
+    key: "{{ wazuh_manager_repo_rpm_gpgkey }}"
+    state: present
+  when: ansible_facts['os_family'] == "RedHat"
+
+- name: Install Wazuh manager package
+  ansible.builtin.package:
+    name: "{{ wazuh_manager_package_name }}"
+    state: present
+
+- name: Install Filebeat package
+  ansible.builtin.package:
+    name: filebeat
+    state: present
+
+- name: Download Wazuh Filebeat configuration
+  ansible.builtin.get_url:
+    url: "{{ wazuh_manager_filebeat_config_url }}"
+    dest: /etc/filebeat/filebeat.yml
+    mode: "0644"
+  notify: Restart Filebeat
+
+- name: Configure Filebeat indexer hosts
+  ansible.builtin.lineinfile:
+    path: /etc/filebeat/filebeat.yml
+    regexp: '^\s*hosts:\s*\[.*\]\s*$'
+    insertafter: '^output\.elasticsearch:'
+    line: "  hosts: {{ wazuh_manager_indexer_hosts | to_json }}"
+  notify: Restart Filebeat
+
+- name: Check Filebeat keystore via CLI
+  ansible.builtin.command: filebeat keystore list
+  register: wazuh_manager_filebeat_keystore_list
+  changed_when: false
+  failed_when: false
+
+- name: Create Filebeat keystore
+  ansible.builtin.command: filebeat keystore create
+  when:
+    - not wazuh_manager_filebeat_keystore_force | bool
+    - wazuh_manager_filebeat_keystore_list.rc != 0
+
+- name: Create Filebeat keystore (force)
+  ansible.builtin.command: filebeat keystore create --force
+  when:
+    - wazuh_manager_filebeat_keystore_force | bool
+
+- name: List Filebeat keystore entries
+  ansible.builtin.command: filebeat keystore list
+  register: wazuh_manager_filebeat_keystore_entries
+  changed_when: false
+  failed_when: false
+
+- name: Add Filebeat keystore username
+  ansible.builtin.shell: >
+    echo "{{ wazuh_manager_indexer_username }}"
+    | filebeat keystore add username --stdin --force
+  when:
+    - wazuh_manager_indexer_keystore_force | bool
+      or ('username' not in (wazuh_manager_filebeat_keystore_entries.stdout_lines | default([])))
+
+- name: Add Filebeat keystore password
+  ansible.builtin.shell: >
+    echo "{{ wazuh_manager_indexer_password }}"
+    | filebeat keystore add password --stdin --force
+  no_log: true
+  when:
+    - wazuh_manager_indexer_keystore_force | bool
+      or ('password' not in (wazuh_manager_filebeat_keystore_entries.stdout_lines | default([])))
+
+- name: Download Wazuh Filebeat template
+  ansible.builtin.get_url:
+    url: "{{ wazuh_manager_filebeat_template_url }}"
+    dest: /etc/filebeat/wazuh-template.json
+    mode: "0644"
+
+- name: Download Wazuh Filebeat module
+  ansible.builtin.get_url:
+    url: "{{ wazuh_manager_filebeat_module_url }}"
+    dest: /tmp/wazuh-filebeat-0.5.tar.gz
+    mode: "0644"
+
+- name: Extract Wazuh Filebeat module
+  ansible.builtin.unarchive:
+    src: /tmp/wazuh-filebeat-0.5.tar.gz
+    dest: /usr/share/filebeat/module
+    remote_src: true
+  notify: Restart Filebeat
+
+- name: Ensure Filebeat certs directory exists
+  ansible.builtin.file:
+    path: /etc/filebeat/certs
+    state: directory
+    mode: "0500"
+  when: wazuh_manager_manage_certificates | bool
+
+- name: Copy Wazuh certificates tarball
+  ansible.builtin.copy:
+    src: "{{ wazuh_manager_certificates_tar_src }}"
+    dest: "{{ wazuh_manager_certificates_tar_path }}"
+    mode: "0600"
+  when:
+    - wazuh_manager_manage_certificates | bool
+    - wazuh_manager_certificates_tar_src | length > 0
+    - wazuh_manager_certificates_tar_src != wazuh_manager_certificates_tar_path
+
+- name: Check for Wazuh certificates tarball
+  ansible.builtin.stat:
+    path: "{{ wazuh_manager_certificates_tar_path }}"
+  register: wazuh_manager_cert_tar_stat
+  when: wazuh_manager_manage_certificates | bool
+
+- name: Extract Wazuh manager certificates
+  ansible.builtin.command: >
+    tar -xf {{ wazuh_manager_certificates_tar_path }}
+    -C /etc/filebeat/certs/
+    --strip-components=1
+    wazuh-certificates/{{ wazuh_manager_node_name }}.pem
+    wazuh-certificates/{{ wazuh_manager_node_name }}-key.pem
+    wazuh-certificates/root-ca.pem
+  args:
+    creates: /etc/filebeat/certs/filebeat.pem
+  when:
+    - wazuh_manager_manage_certificates | bool
+    - wazuh_manager_cert_tar_stat.stat.exists | default(false)
+  notify: Restart Filebeat
+
+- name: Rename Filebeat certificate
+  ansible.builtin.command: >
+    mv -n /etc/filebeat/certs/{{ wazuh_manager_node_name }}.pem /etc/filebeat/certs/filebeat.pem
+  args:
+    creates: /etc/filebeat/certs/filebeat.pem
+  when:
+    - wazuh_manager_manage_certificates | bool
+    - wazuh_manager_cert_tar_stat.stat.exists | default(false)
+  notify: Restart Filebeat
+
+- name: Rename Filebeat key
+  ansible.builtin.command: >
+    mv -n /etc/filebeat/certs/{{ wazuh_manager_node_name }}-key.pem /etc/filebeat/certs/filebeat-key.pem
+  args:
+    creates: /etc/filebeat/certs/filebeat-key.pem
+  when:
+    - wazuh_manager_manage_certificates | bool
+    - wazuh_manager_cert_tar_stat.stat.exists | default(false)
+  notify: Restart Filebeat
+
+- name: Set Filebeat certificate permissions
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /etc/filebeat/certs/filebeat.pem, mode: "0400" }
+    - { path: /etc/filebeat/certs/filebeat-key.pem, mode: "0400" }
+    - { path: /etc/filebeat/certs/root-ca.pem, mode: "0400" }
+  when:
+    - wazuh_manager_manage_certificates | bool
+    - wazuh_manager_cert_tar_stat.stat.exists | default(false)
+  notify: Restart Filebeat
+
+- name: Remove certificates tarball
+  ansible.builtin.file:
+    path: "{{ wazuh_manager_certificates_tar_path }}"
+    state: absent
+  when:
+    - wazuh_manager_manage_certificates | bool
+    - wazuh_manager_remove_cert_tar | bool
+
+- name: Update Wazuh indexer hosts in ossec.conf
+  ansible.builtin.replace:
+    path: /var/ossec/etc/ossec.conf
+    regexp: '(?s)(<indexer>.*?)(<hosts>.*?</hosts>)(.*?</indexer>)'
+    replace: '\1{{ lookup("template", "indexer.hosts.block.j2") | trim }}\3'
+  notify: Restart Wazuh manager
+
+- name: Update Wazuh indexer CA path in ossec.conf
+  ansible.builtin.replace:
+    path: /var/ossec/etc/ossec.conf
+    regexp: '(?s)(<indexer>.*?<ca>).*?(</ca>)'
+    replace: '\1/etc/filebeat/certs/root-ca.pem\2'
+  notify: Restart Wazuh manager
+
+- name: Update Wazuh indexer certificate path in ossec.conf
+  ansible.builtin.replace:
+    path: /var/ossec/etc/ossec.conf
+    regexp: '(?s)(<indexer>.*?<certificate>).*?(</certificate>)'
+    replace: '\1/etc/filebeat/certs/filebeat.pem\2'
+  notify: Restart Wazuh manager
+
+- name: Update Wazuh indexer key path in ossec.conf
+  ansible.builtin.replace:
+    path: /var/ossec/etc/ossec.conf
+    regexp: '(?s)(<indexer>.*?<key>).*?(</key>)'
+    replace: '\1/etc/filebeat/certs/filebeat-key.pem\2'
+  notify: Restart Wazuh manager
+
+- name: List Wazuh keystore entries
+  ansible.builtin.command: /var/ossec/bin/wazuh-keystore -l
+  register: wazuh_manager_keystore_list
+  changed_when: false
+  failed_when: false
+
+- name: Add Wazuh keystore indexer username
+  ansible.builtin.shell: >
+    echo "{{ wazuh_manager_indexer_username }}"
+    | /var/ossec/bin/wazuh-keystore -f indexer -k username
+  when:
+    - wazuh_manager_indexer_keystore_force | bool
+      or (wazuh_manager_keystore_list.rc != 0)
+      or ('indexer' not in (wazuh_manager_keystore_list.stdout | default('')))
+
+- name: Add Wazuh keystore indexer password
+  ansible.builtin.shell: >
+    echo "{{ wazuh_manager_indexer_password }}"
+    | /var/ossec/bin/wazuh-keystore -f indexer -k password
+  no_log: true
+  when:
+    - wazuh_manager_indexer_keystore_force | bool
+      or (wazuh_manager_keystore_list.rc != 0)
+      or ('indexer' not in (wazuh_manager_keystore_list.stdout | default('')))
+
+- name: Enable and start Wazuh manager service
+  ansible.builtin.systemd:
+    name: "{{ wazuh_manager_service_name }}"
+    enabled: true
+    state: started
+
+- name: Enable and start Filebeat service
+  ansible.builtin.systemd:
+    name: "{{ wazuh_manager_filebeat_service_name }}"
+    enabled: true
+    state: started
+
+- name: Check Wazuh manager paths for restorecon
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ wazuh_manager_selinux_restorecon_paths }}"
+  register: wazuh_manager_selinux_restorecon_stats
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - wazuh_manager_selinux_manage | bool
+
+- name: Restore SELinux contexts for Wazuh manager paths
+  ansible.builtin.command: >
+    restorecon -Rv {{ item.item }}
+  loop: "{{ wazuh_manager_selinux_restorecon_stats.results }}"
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - wazuh_manager_selinux_manage | bool
+    - item.stat.exists | default(false)
+
+- name: Install fapolicyd rules for Wazuh manager
+  ansible.builtin.template:
+    src: fapolicyd.rules.j2
+    dest: "{{ wazuh_manager_fapolicyd_rule_path }}"
+    mode: "0644"
+  register: wazuh_manager_fapolicyd_rules
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - wazuh_manager_fapolicyd_manage | bool
+
+- name: Reload fapolicyd rules
+  ansible.builtin.command: fagenrules --load
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - wazuh_manager_fapolicyd_manage | bool
+    - wazuh_manager_fapolicyd_rules is changed
+
+- name: Disable Wazuh repository after install (APT)
+  ansible.builtin.apt_repository:
+    repo: "{{ wazuh_manager_repo_apt }}"
+    filename: wazuh
+    state: absent
+  when:
+    - ansible_facts['os_family'] == "Debian"
+    - wazuh_manager_disable_repo_after_install | bool
+
+- name: Disable Wazuh repository after install (RPM)
+  ansible.builtin.lineinfile:
+    path: /etc/yum.repos.d/wazuh.repo
+    regexp: '^enabled='
+    line: 'enabled=0'
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - wazuh_manager_disable_repo_after_install | bool
+
+- name: Ensure firewalld is installed (RPM)
+  ansible.builtin.package:
+    name: firewalld
+    state: present
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - (wazuh_manager_firewalld_manage | default(true)) | bool
+
+- name: Ensure firewalld is running (RPM)
+  ansible.builtin.systemd:
+    name: firewalld
+    enabled: true
+    state: started
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - (wazuh_manager_firewalld_manage | default(true)) | bool
+
+- name: Open Wazuh manager firewall ports
+  ansible.posix.firewalld:
+    port: "{{ item }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ wazuh_manager_firewalld_ports }}"
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - (wazuh_manager_firewalld_manage | default(true)) | bool
+    - (wazuh_manager_firewalld_agent_sources | default([])) | length == 0
+
+- name: Build firewalld rich rules for agent sources
+  ansible.builtin.set_fact:
+    wazuh_manager_firewalld_rich_rules: "{{ wazuh_manager_firewalld_rich_rules | default([]) + [ 'rule family=\"ipv4\" source address=\"' ~ item.0 ~ '\" port port=\"' ~ item.1.port ~ '\" protocol=\"' ~ item.1.protocol ~ '\" accept' ] }}"
+  loop: "{{ (wazuh_manager_firewalld_agent_sources | default([])) | product([{'port': '1514', 'protocol': wazuh_manager_agent_protocol}, {'port': '1515', 'protocol': 'tcp'}, {'port': '55000', 'protocol': 'tcp'}]) | list }}"
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - (wazuh_manager_firewalld_manage | default(true)) | bool
+    - (wazuh_manager_firewalld_agent_sources | default([])) | length > 0
+
+- name: Open Wazuh manager firewall ports for agent sources
+  ansible.posix.firewalld:
+    rich_rule: "{{ item }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ wazuh_manager_firewalld_rich_rules | default([]) }}"
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - (wazuh_manager_firewalld_manage | default(true)) | bool
+    - (wazuh_manager_firewalld_agent_sources | default([])) | length > 0

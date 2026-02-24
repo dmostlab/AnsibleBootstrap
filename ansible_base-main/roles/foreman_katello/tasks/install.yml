@@ -1,0 +1,177 @@
+---
+- name: Pre-flight - Verify Pulp storage is mounted
+  assert:
+    that:
+      - ansible_mounts | selectattr('mount', 'equalto', foreman_pulp_mount) | list | length > 0
+    fail_msg: "Pulp storage is not mounted at {{ foreman_pulp_mount }}."
+
+- name: Ensure RPM cache directory exists
+  file:
+    path: "{{ foreman_rpm_cache_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Download release RPMs (Foreman, Katello, Puppet)
+  get_url:
+    url: "{{ item }}"
+    dest: "{{ foreman_rpm_cache_dir }}/{{ item | basename }}"
+    mode: '0644'
+  loop:
+    - "{{ foreman_repo_url }}"
+    - "{{ katello_repo_url }}"
+    - "{{ puppet_repo_url }}"
+
+- name: Install release packages from local path
+  dnf:
+    name:
+      - "{{ foreman_rpm_cache_dir }}/{{ foreman_repo_url | basename }}"
+      - "{{ foreman_rpm_cache_dir }}/{{ katello_repo_url | basename }}"
+      - "{{ foreman_rpm_cache_dir }}/{{ puppet_repo_url | basename }}"
+    state: present
+    disable_gpg_check: yes
+
+- name: Install Foreman/Katello installer packages
+  dnf:
+    name:
+      - foreman-installer
+      - katello
+      - ansible-core
+      - foreman-cli
+      - puppet-agent
+      - rubygem-kafo
+      - rubygem-kafo_parsers
+      - puppet-agent-puppet-strings
+    state: present
+
+- name: Ensure puppet group exists
+  group:
+    name: puppet
+    state: present
+
+- name: Ensure foreman group exists
+  group:
+    name: foreman
+    state: present
+
+- name: Ensure Ansible paths exist for proxy plugin defaults
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /etc/ansible
+    - /etc/ansible/roles
+    - /etc/ansible/collections
+
+- name: Ensure installer configuration directory exists
+  file:
+    path: /etc/foreman-installer/scenarios.d
+    state: directory
+    mode: '0750'
+
+# - name: Ensure foreman-proxy SSL directory exists
+#   file:
+#     path: /etc/foreman-proxy
+#     state: directory
+#     mode: '0755'
+
+# - name: Ensure Puppet SSL directories exist
+#   file:
+#     path: "{{ item }}"
+#     state: directory
+#     mode: '0755'
+#   loop:
+#     - /etc/puppetlabs/puppet/ssl/certs
+#     - /etc/puppetlabs/puppet/ssl/private_keys
+
+# - name: Check for Puppet SSL files expected by Foreman
+#   stat:
+#     path: "{{ item }}"
+#   loop:
+#     - "/etc/puppetlabs/puppet/ssl/certs/{{ ansible_fqdn }}.pem"
+#     - "/etc/puppetlabs/puppet/ssl/private_keys/{{ ansible_fqdn }}.pem"
+#     - /etc/puppetlabs/puppet/ssl/certs/ca.pem
+#   register: puppet_ssl_stats
+
+# - name: Check for existing foreman-proxy SSL files
+#   stat:
+#     path: "{{ item }}"
+#   loop:
+#     - /etc/foreman-proxy/ssl_cert.pem
+#     - /etc/foreman-proxy/ssl_key.pem
+#     - /etc/foreman-proxy/ssl_ca.pem
+#   register: foreman_proxy_ssl_stats
+
+# - name: Check for Katello SSL source files
+#   stat:
+#     path: "{{ item }}"
+#   loop:
+#     - /etc/pki/katello/certs/katello-apache.crt
+#     - /etc/pki/katello/private/katello-apache.key
+#     - /etc/pki/katello/certs/katello-default-ca.crt
+#   register: katello_ssl_stats
+
+# - name: Seed foreman-proxy SSL files from Katello certs if missing
+#   copy:
+#     src: "{{ item.src }}"
+#     dest: "{{ item.dest }}"
+#     remote_src: true
+#     mode: "{{ item.mode }}"
+#     owner: root
+#     group: foreman-proxy
+#   loop:
+#     - { src: "/etc/pki/katello/certs/katello-apache.crt", dest: "/etc/foreman-proxy/ssl_cert.pem", mode: "0640" }
+#     - { src: "/etc/pki/katello/private/katello-apache.key", dest: "/etc/foreman-proxy/ssl_key.pem", mode: "0640" }
+#     - { src: "/etc/pki/katello/certs/katello-default-ca.crt", dest: "/etc/foreman-proxy/ssl_ca.pem", mode: "0640" }
+#   when:
+#     - katello_ssl_stats.results | selectattr('stat.exists') | list | length == 3
+#     - foreman_proxy_ssl_stats.results | selectattr('stat.exists') | list | length < 3
+
+# - name: Seed Puppet SSL files from Katello certs if missing
+#   copy:
+#     src: "{{ item.src }}"
+#     dest: "{{ item.dest }}"
+#     remote_src: true
+#     owner: root
+#     group: foreman
+#     mode: "{{ item.mode }}"
+#   loop:
+#     - { src: "/etc/pki/katello/certs/katello-apache.crt", dest: "/etc/puppetlabs/puppet/ssl/certs/{{ ansible_fqdn }}.pem", mode: "0640" }
+#     - { src: "/etc/pki/katello/private/katello-apache.key", dest: "/etc/puppetlabs/puppet/ssl/private_keys/{{ ansible_fqdn }}.pem", mode: "0640" }
+#     - { src: "/etc/pki/katello/certs/katello-default-ca.crt", dest: "/etc/puppetlabs/puppet/ssl/certs/ca.pem", mode: "0640" }
+#   when:
+#     - katello_ssl_stats.results | selectattr('stat.exists') | list | length == 3
+#     - puppet_ssl_stats.results | selectattr('stat.exists') | list | length < 3
+
+# - name: Ensure foreman-proxy SSL permissions are readable by foreman-proxy
+#   file:
+#     path: "{{ item }}"
+#     owner: root
+#     group: foreman-proxy
+#     mode: "0640"
+#   loop:
+#     - /etc/foreman-proxy/ssl_cert.pem
+#     - /etc/foreman-proxy/ssl_key.pem
+#     - /etc/foreman-proxy/ssl_ca.pem
+
+- name: Deploy Katello answers file from template
+  template:
+    src: katello-answers.j2
+    dest: /etc/foreman-installer/scenarios.d/katello-answers.yaml
+    mode: '0640'
+
+- name: Point katello scenario to custom answers file
+  lineinfile:
+    path: /etc/foreman-installer/scenarios.d/katello.yaml
+    regexp: '^:answer_file:'
+    line: ':answer_file: /etc/foreman-installer/scenarios.d/katello-answers.yaml'
+    create: yes
+
+- name: Run Foreman-Katello Installer
+  command: >
+    foreman-installer --scenario katello
+  register: installer_output
+  environment:
+    PATH: "/sbin:/bin:/usr/sbin:/usr/bin:/opt/puppetlabs/bin"
+    TERM: xterm-256color
+  failed_when: installer_output.rc != 0

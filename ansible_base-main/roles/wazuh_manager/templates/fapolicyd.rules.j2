@@ -1,0 +1,7 @@
+{% for dir in wazuh_manager_fapolicyd_allow_dirs %}
+allow perm=execute all : dir={{ dir }}
+allow perm=open all : dir={{ dir }}
+{% endfor %}
+{% for path in wazuh_manager_fapolicyd_allow_paths %}
+allow all all : path={{ path }}
+{% endfor %}

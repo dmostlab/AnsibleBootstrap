@@ -1,0 +1,5 @@
+roles:
+  - name: RedHatOfficial.rhel9_stig
+
+collections:
+  - name: fedora.linux_system_roles

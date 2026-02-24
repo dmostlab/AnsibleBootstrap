@@ -1,0 +1,6 @@
+galaxy_info:
+  role_name: wazuh_dashboard
+  author: codex
+  description: Install and configure Wazuh Dashboard
+  min_ansible_version: "2.12"
+  license: MIT

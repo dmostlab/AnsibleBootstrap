@@ -1,0 +1,49 @@
+---
+- name: set vars for community edition
+  ansible.builtin.include_tasks:
+    file: set-ce-edition.yml
+  when:
+    - gitlab_edition == 'community'
+- name: set vars for enterprise edition
+  ansible.builtin.include_tasks:
+    file: set-ee-edition.yml
+  when:
+    - gitlab_edition == 'enterprise'
+
+- name: configure firewall rules
+  ansible.builtin.import_tasks: firewall.yml
+
+
+
+- name: import pre-tasks
+  ansible.builtin.import_tasks: install-prerequisites.yml
+
+- name: setup gitlab repo
+  ansible.builtin.import_tasks: setup-gitlab-repo.yml
+
+- name: install gitlab
+  ansible.builtin.import_tasks: install-gitlab.yml
+
+- name: Apply fapolicyd base configuration
+  ansible.builtin.include_role:
+    name: fedora.linux_system_roles.fapolicyd
+  vars:
+    # Hardcoded base settings
+    fapolicyd_setup_trust: "rpmdb,file"
+    fapolicyd_setup_integrity: "sha256"
+    # Rocky Linux 9 Spoofing (Bypasses the compatibility fails)
+#    ansible_distribution: "RedHat"
+#    ansible_distribution_major_version: "9"
+#    ansible_distribution_version: "9.2"
+
+- name: Create GitLab specific fapolicyd rules
+  ansible.builtin.copy:
+    dest: /etc/fapolicyd/rules.d/80-gitlab.rules
+    owner: root
+    group: fapolicyd
+    mode: '0644'
+    content: |
+      # Allow everything inside the GitLab installation and data paths
+      allow perm=any all : dir=/opt/gitlab/
+      allow perm=any all : dir=/var/opt/gitlab/
+  notify: Update and Restart fapolicyd

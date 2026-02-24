@@ -1,0 +1,18 @@
+---
+# 1. KILL THE TIMEOUTS (Confirmed working)
+DISA_STIG_RHEL_09_411015: false
+DISA_STIG_RHEL_09_411010: false
+DISA_STIG_RHEL_09_232230: false
+
+# 2. FIX THE SSH DROP-INS
+# These names must match the role's internal 'var_' mapping to overwrite the .conf files
+sshd_disable_empty_passwords: true
+sshd_enable_pubkey_auth: true
+# Force these to NO to stop the password fallback
+passwordauthentication: "no"
+kbdinteractiveauthentication: "no"
+usepam: "no"
+
+# 3. THE WHITELIST
+rhel9stig_ssh_allowed_users: ["bigboss"]
+aide_periodic_cron_checking: false

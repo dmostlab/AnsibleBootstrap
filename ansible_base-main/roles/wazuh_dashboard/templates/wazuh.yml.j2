@@ -1,0 +1,7 @@
+hosts:
+  - default:
+      url: "{{ wazuh_dashboard_wazuh_api_url }}"
+      port: {{ wazuh_dashboard_wazuh_api_port }}
+      username: "{{ wazuh_dashboard_wazuh_api_username }}"
+      password: "{{ wazuh_dashboard_wazuh_api_password }}"
+      run_as: false

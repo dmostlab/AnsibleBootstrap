@@ -1,0 +1,12 @@
+wazuh_indexer_pkg_deps_apt:
+  - debconf
+  - adduser
+  - procps
+  - gnupg
+  - apt-transport-https
+  - tar
+
+wazuh_indexer_pkg_deps_rpm:
+  - coreutils
+  - tar
+  - util-linux

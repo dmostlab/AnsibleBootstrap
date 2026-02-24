@@ -1,0 +1,19 @@
+nodes:
+  indexer:
+{% for node in wazuh_indexer_certs_indexer_nodes %}
+    - name: "{{ node.name }}"
+      ip: "{{ node.ip }}"
+{% endfor %}
+  server:
+{% for node in wazuh_indexer_certs_server_nodes %}
+    - name: "{{ node.name }}"
+      ip: "{{ node.ip }}"
+{% if (not wazuh_single_node | bool) and (node.node_type is defined) %}
+      node_type: "{{ node.node_type }}"
+{% endif %}
+{% endfor %}
+  dashboard:
+{% for node in wazuh_indexer_certs_dashboard_nodes %}
+    - name: "{{ node.name }}"
+      ip: "{{ node.ip }}"
+{% endfor %}

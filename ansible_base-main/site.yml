@@ -1,0 +1,26 @@
+---
+- name: Apply STIG Baseline to Maryland Lab
+  hosts: all
+  roles:
+    - role: RedHatOfficial.rhel9_stig
+  tags: stig
+
+- name: Install Forman and Katello
+  hosts: foreman_katello
+  roles:
+    - role: foreman_katello
+  tags: foreman
+
+- name: Wazuh All-in-One (default)
+  hosts: wazuh_aio
+  roles:
+    - role: wazuh_indexer
+    - role: wazuh_manager
+    - role: wazuh_dashboard
+  tags: waz
+
+- name: Install Gitlab CE
+  hosts: gitlab_main
+  roles:
+    - role: gitlab_ce
+  tags: gitlab

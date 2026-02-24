@@ -1,0 +1,9 @@
+wazuh_dashboard_pkg_deps_apt:
+  - debconf
+  - adduser
+  - procps
+  - gnupg
+  - apt-transport-https
+
+wazuh_dashboard_pkg_deps_rpm:
+  - coreutils

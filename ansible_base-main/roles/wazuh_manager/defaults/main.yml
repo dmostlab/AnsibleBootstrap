@@ -1,0 +1,54 @@
+wazuh_manager_manage_certificates: true
+wazuh_certificates_tar_src: ""
+wazuh_manager_certificates_workdir: "/root"
+wazuh_manager_certificates_tar_path: "{{ wazuh_manager_certificates_workdir }}/wazuh-certificates.tar"
+wazuh_manager_certificates_tar_src: "{{ (wazuh_single_node | default(false)) | ternary(wazuh_manager_certificates_tar_path, wazuh_certificates_tar_src) }}"
+wazuh_manager_remove_cert_tar: false
+
+wazuh_manager_node_name: "wazuh-1"
+wazuh_manager_indexer_hosts:
+  - "https://{{ ansible_default_ipv4.address | default('127.0.0.1') }}:9200"
+
+wazuh_manager_indexer_username: "admin"
+wazuh_manager_indexer_password: "admin"
+wazuh_manager_indexer_keystore_force: false
+wazuh_manager_filebeat_keystore_force: false
+
+wazuh_manager_filebeat_config_url: "https://packages.wazuh.com/4.14/tpl/wazuh/filebeat/filebeat.yml"
+wazuh_manager_filebeat_template_url: "https://raw.githubusercontent.com/wazuh/wazuh/v4.14.3/extensions/elasticsearch/7.x/wazuh-template.json"
+wazuh_manager_filebeat_module_url: "https://packages.wazuh.com/4.x/filebeat/wazuh-filebeat-0.5.tar.gz"
+
+wazuh_manager_gpg_key_url: "https://packages.wazuh.com/key/GPG-KEY-WAZUH"
+wazuh_manager_repo_apt: "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main"
+wazuh_manager_repo_rpm_baseurl: "https://packages.wazuh.com/4.x/yum/"
+wazuh_manager_repo_rpm_gpgkey: "https://packages.wazuh.com/key/GPG-KEY-WAZUH"
+wazuh_manager_repo_rpm_name: "wazuh"
+wazuh_manager_disable_repo_after_install: true
+
+wazuh_manager_package_name: "wazuh-manager"
+wazuh_manager_service_name: "wazuh-manager"
+wazuh_manager_filebeat_service_name: "filebeat"
+
+wazuh_fips_enabled: true
+wazuh_manager_fips_enable: "{{ wazuh_fips_enabled }}"
+
+wazuh_manager_selinux_manage: true
+wazuh_manager_selinux_restorecon_paths:
+  - /var/ossec
+  - /etc/filebeat
+  - /var/log/filebeat
+
+wazuh_manager_fapolicyd_manage: true
+wazuh_manager_fapolicyd_rule_path: "/etc/fapolicyd/rules.d/80-wazuh-manager.rules"
+wazuh_manager_fapolicyd_allow_dirs: []
+wazuh_manager_fapolicyd_allow_paths:
+  - /var/ossec/bin/wazuh-control
+  - /var/ossec/bin/wazuh-syscheckd
+
+wazuh_manager_firewalld_manage: true
+wazuh_manager_agent_protocol: "tcp"
+wazuh_manager_firewalld_agent_sources: []
+wazuh_manager_firewalld_ports:
+  - "1514/{{ wazuh_manager_agent_protocol }}"
+  - "1515/tcp"
+  - "55000/tcp"

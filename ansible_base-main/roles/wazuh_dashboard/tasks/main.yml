@@ -1,0 +1,287 @@
+- name: Install Wazuh dashboard dependencies (APT)
+  ansible.builtin.apt:
+    name: "{{ wazuh_dashboard_pkg_deps_apt }}"
+    state: present
+    update_cache: true
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Install Wazuh dashboard dependencies (RPM)
+  ansible.builtin.package:
+    name: "{{ wazuh_dashboard_pkg_deps_rpm }}"
+    state: present
+  when: ansible_facts['os_family'] == "RedHat"
+
+- name: Install SELinux tooling (RPM)
+  ansible.builtin.package:
+    name: policycoreutils-python-utils
+    state: present
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - wazuh_dashboard_selinux_manage | bool
+
+- name: Download Wazuh GPG key (APT)
+  ansible.builtin.get_url:
+    url: "{{ wazuh_dashboard_gpg_key_url }}"
+    dest: /tmp/GPG-KEY-WAZUH
+    mode: "0644"
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Import Wazuh GPG key (APT)
+  ansible.builtin.command: >
+    gpg --no-default-keyring --keyring gnupg-ring:/usr/share/keyrings/wazuh.gpg --import /tmp/GPG-KEY-WAZUH
+  args:
+    creates: /usr/share/keyrings/wazuh.gpg
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Ensure Wazuh keyring permissions (APT)
+  ansible.builtin.file:
+    path: /usr/share/keyrings/wazuh.gpg
+    mode: "0644"
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Add Wazuh repository (APT)
+  ansible.builtin.apt_repository:
+    repo: "{{ wazuh_dashboard_repo_apt }}"
+    filename: wazuh
+    state: present
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Update APT cache after adding Wazuh repository
+  ansible.builtin.apt:
+    update_cache: true
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Add Wazuh repository (RPM)
+  ansible.builtin.template:
+    src: wazuh.repo.j2
+    dest: /etc/yum.repos.d/wazuh.repo
+    mode: "0644"
+  when: ansible_facts['os_family'] == "RedHat"
+
+- name: Import Wazuh GPG key (RPM)
+  ansible.builtin.rpm_key:
+    key: "{{ wazuh_dashboard_repo_rpm_gpgkey }}"
+    state: present
+  when: ansible_facts['os_family'] == "RedHat"
+
+- name: Install Wazuh dashboard package
+  ansible.builtin.package:
+    name: "{{ wazuh_dashboard_package_name }}"
+    state: present
+
+- name: Ensure Wazuh dashboard config directory exists
+  ansible.builtin.file:
+    path: /usr/share/wazuh-dashboard/data/wazuh/config
+    state: directory
+    owner: wazuh-dashboard
+    group: wazuh-dashboard
+    mode: "0750"
+
+- name: Render Wazuh dashboard wazuh.yml
+  ansible.builtin.template:
+    src: wazuh.yml.j2
+    dest: /usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml
+    owner: wazuh-dashboard
+    group: wazuh-dashboard
+    mode: "0640"
+  notify: Restart Wazuh dashboard
+
+- name: Configure Wazuh dashboard server host
+  ansible.builtin.lineinfile:
+    path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+    regexp: '^server\.host:'
+    line: "server.host: {{ wazuh_dashboard_server_host }}"
+  notify: Restart Wazuh dashboard
+
+- name: Configure Wazuh dashboard server port
+  ansible.builtin.lineinfile:
+    path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+    regexp: '^server\.port:'
+    line: "server.port: {{ wazuh_dashboard_server_port }}"
+  notify: Restart Wazuh dashboard
+
+- name: Configure Wazuh dashboard OpenSearch hosts
+  ansible.builtin.lineinfile:
+    path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+    regexp: '^opensearch\.hosts:'
+    line: "opensearch.hosts: {{ wazuh_dashboard_opensearch_hosts | to_json }}"
+  notify: Restart Wazuh dashboard
+
+- name: Configure Wazuh dashboard OpenSearch username
+  ansible.builtin.lineinfile:
+    path: /etc/wazuh-dashboard/opensearch_dashboards.yml
+    regexp: '^opensearch\.username:'
+    line: "opensearch.username: {{ wazuh_dashboard_opensearch_username }}"
+  notify: Restart Wazuh dashboard
+
+- name: Create Wazuh dashboard keystore
+  ansible.builtin.command: /usr/share/wazuh-dashboard/bin/opensearch-dashboards-keystore create --allow-root
+  args:
+    creates: /usr/share/wazuh-dashboard/data/opensearch-dashboards.keystore
+
+- name: List Wazuh dashboard keystore entries
+  ansible.builtin.command: /usr/share/wazuh-dashboard/bin/opensearch-dashboards-keystore list --allow-root
+  register: wazuh_dashboard_keystore_list
+  changed_when: false
+  failed_when: false
+
+- name: Add Wazuh dashboard OpenSearch password to keystore
+  ansible.builtin.shell: >
+    echo "{{ wazuh_dashboard_opensearch_password }}"
+    | /usr/share/wazuh-dashboard/bin/opensearch-dashboards-keystore add opensearch.password --stdin --allow-root
+    {% if wazuh_dashboard_keystore_force | bool %} --force{% endif %}
+  no_log: true
+  when:
+    - wazuh_dashboard_keystore_force | bool
+      or ('opensearch.password' not in (wazuh_dashboard_keystore_list.stdout_lines | default([])))
+
+- name: Ensure Wazuh dashboard certs directory exists
+  ansible.builtin.file:
+    path: /etc/wazuh-dashboard/certs
+    state: directory
+    owner: wazuh-dashboard
+    group: wazuh-dashboard
+    mode: "0500"
+  when: wazuh_dashboard_manage_certificates | bool
+
+- name: Copy Wazuh certificates tarball
+  ansible.builtin.copy:
+    src: "{{ wazuh_dashboard_certificates_tar_src }}"
+    dest: "{{ wazuh_dashboard_certificates_tar_path }}"
+    mode: "0600"
+  when:
+    - wazuh_dashboard_manage_certificates | bool
+    - wazuh_dashboard_certificates_tar_src | length > 0
+    - wazuh_dashboard_certificates_tar_src != wazuh_dashboard_certificates_tar_path
+
+- name: Check for Wazuh certificates tarball
+  ansible.builtin.stat:
+    path: "{{ wazuh_dashboard_certificates_tar_path }}"
+  register: wazuh_dashboard_cert_tar_stat
+  when: wazuh_dashboard_manage_certificates | bool
+
+- name: Extract Wazuh dashboard certificates
+  ansible.builtin.command: >
+    tar -xf {{ wazuh_dashboard_certificates_tar_path }}
+    -C /etc/wazuh-dashboard/certs/
+    --strip-components=1
+    wazuh-certificates/{{ wazuh_dashboard_node_name }}.pem
+    wazuh-certificates/{{ wazuh_dashboard_node_name }}-key.pem
+    wazuh-certificates/root-ca.pem
+  args:
+    creates: /etc/wazuh-dashboard/certs/{{ wazuh_dashboard_node_name }}.pem
+  when:
+    - wazuh_dashboard_manage_certificates | bool
+    - wazuh_dashboard_cert_tar_stat.stat.exists | default(false)
+  notify: Restart Wazuh dashboard
+
+- name: Set Wazuh dashboard certificate permissions
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: wazuh-dashboard
+    group: wazuh-dashboard
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "/etc/wazuh-dashboard/certs/{{ wazuh_dashboard_node_name }}.pem", mode: "0400" }
+    - { path: "/etc/wazuh-dashboard/certs/{{ wazuh_dashboard_node_name }}-key.pem", mode: "0400" }
+    - { path: /etc/wazuh-dashboard/certs/root-ca.pem, mode: "0400" }
+  when:
+    - wazuh_dashboard_manage_certificates | bool
+    - wazuh_dashboard_cert_tar_stat.stat.exists | default(false)
+  notify: Restart Wazuh dashboard
+
+- name: Remove certificates tarball
+  ansible.builtin.file:
+    path: "{{ wazuh_dashboard_certificates_tar_path }}"
+    state: absent
+  when:
+    - wazuh_dashboard_manage_certificates | bool
+    - wazuh_dashboard_remove_cert_tar | bool
+
+
+- name: Enable and start Wazuh dashboard service
+  ansible.builtin.systemd:
+    name: "{{ wazuh_dashboard_service_name }}"
+    enabled: true
+    state: started
+
+- name: Check Wazuh dashboard paths for restorecon
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ wazuh_dashboard_selinux_restorecon_paths }}"
+  register: wazuh_dashboard_selinux_restorecon_stats
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - wazuh_dashboard_selinux_manage | bool
+
+- name: Restore SELinux contexts for Wazuh dashboard paths
+  ansible.builtin.command: >
+    restorecon -Rv {{ item.item }}
+  loop: "{{ wazuh_dashboard_selinux_restorecon_stats.results }}"
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - wazuh_dashboard_selinux_manage | bool
+    - item.stat.exists | default(false)
+
+- name: Install fapolicyd rules for Wazuh dashboard
+  ansible.builtin.template:
+    src: fapolicyd.rules.j2
+    dest: "{{ wazuh_dashboard_fapolicyd_rule_path }}"
+    mode: "0644"
+  register: wazuh_dashboard_fapolicyd_rules
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - wazuh_dashboard_fapolicyd_manage | bool
+
+- name: Reload fapolicyd rules
+  ansible.builtin.command: fagenrules --load
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - wazuh_dashboard_fapolicyd_manage | bool
+    - wazuh_dashboard_fapolicyd_rules is changed
+
+- name: Disable Wazuh repository after install (APT)
+  ansible.builtin.apt_repository:
+    repo: "{{ wazuh_dashboard_repo_apt }}"
+    filename: wazuh
+    state: absent
+  when:
+    - ansible_facts['os_family'] == "Debian"
+    - wazuh_dashboard_disable_repo_after_install | bool
+
+- name: Disable Wazuh repository after install (RPM)
+  ansible.builtin.lineinfile:
+    path: /etc/yum.repos.d/wazuh.repo
+    regexp: '^enabled='
+    line: 'enabled=0'
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - wazuh_dashboard_disable_repo_after_install | bool
+
+- name: Ensure firewalld is installed (RPM)
+  ansible.builtin.package:
+    name: firewalld
+    state: present
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - (wazuh_dashboard_firewalld_manage | default(true)) | bool
+
+- name: Ensure firewalld is running (RPM)
+  ansible.builtin.systemd:
+    name: firewalld
+    enabled: true
+    state: started
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - (wazuh_dashboard_firewalld_manage | default(true)) | bool
+
+- name: Open Wazuh dashboard firewall ports
+  ansible.posix.firewalld:
+    port: "{{ item }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop: "{{ wazuh_dashboard_firewalld_ports }}"
+  when:
+    - ansible_facts['os_family'] == "RedHat"
+    - (wazuh_dashboard_firewalld_manage | default(true)) | bool

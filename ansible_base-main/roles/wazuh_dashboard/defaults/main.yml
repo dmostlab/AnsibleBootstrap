@@ -1,0 +1,49 @@
+wazuh_dashboard_manage_certificates: true
+wazuh_certificates_tar_src: ""
+wazuh_dashboard_certificates_workdir: "/root"
+wazuh_dashboard_certificates_tar_path: "{{ wazuh_dashboard_certificates_workdir }}/wazuh-certificates.tar"
+wazuh_dashboard_certificates_tar_src: "{{ (wazuh_single_node | default(false)) | ternary(wazuh_dashboard_certificates_tar_path, wazuh_certificates_tar_src) }}"
+wazuh_dashboard_remove_cert_tar: false
+
+wazuh_dashboard_node_name: "dashboard"
+wazuh_dashboard_server_host: "0.0.0.0"
+wazuh_dashboard_server_port: 443
+wazuh_dashboard_opensearch_hosts:
+  - "https://{{ ansible_default_ipv4.address | default('127.0.0.1') }}:9200"
+wazuh_dashboard_opensearch_username: "kibanaserver"
+wazuh_dashboard_opensearch_password: "kibanaserver"
+wazuh_dashboard_keystore_force: false
+
+wazuh_dashboard_wazuh_api_url: "https://{{ ansible_default_ipv4.address | default('127.0.0.1') }}"
+wazuh_dashboard_wazuh_api_port: 55000
+wazuh_dashboard_wazuh_api_username: "wazuh-wui"
+wazuh_dashboard_wazuh_api_password: "wazuh-wui"
+
+wazuh_dashboard_gpg_key_url: "https://packages.wazuh.com/key/GPG-KEY-WAZUH"
+wazuh_dashboard_repo_apt: "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main"
+wazuh_dashboard_repo_rpm_baseurl: "https://packages.wazuh.com/4.x/yum/"
+wazuh_dashboard_repo_rpm_gpgkey: "https://packages.wazuh.com/key/GPG-KEY-WAZUH"
+wazuh_dashboard_repo_rpm_name: "wazuh"
+wazuh_dashboard_disable_repo_after_install: true
+
+wazuh_dashboard_package_name: "wazuh-dashboard"
+wazuh_dashboard_service_name: "wazuh-dashboard"
+
+wazuh_fips_enabled: true
+wazuh_dashboard_fips_enable: "{{ wazuh_fips_enabled }}"
+
+wazuh_dashboard_selinux_manage: true
+wazuh_dashboard_selinux_restorecon_paths:
+  - /etc/wazuh-dashboard
+  - /usr/share/wazuh-dashboard
+  - /var/log/wazuh-dashboard
+
+wazuh_dashboard_fapolicyd_manage: true
+wazuh_dashboard_fapolicyd_rule_path: "/etc/fapolicyd/rules.d/80-wazuh-dashboard.rules"
+wazuh_dashboard_fapolicyd_allow_dirs: []
+wazuh_dashboard_fapolicyd_allow_paths:
+  - /usr/share/wazuh-dashboard/node/bin/node
+
+wazuh_dashboard_firewalld_manage: true
+wazuh_dashboard_firewalld_ports:
+  - "{{ wazuh_dashboard_server_port }}/tcp"

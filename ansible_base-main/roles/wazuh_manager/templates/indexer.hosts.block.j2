@@ -1,0 +1,5 @@
+  <hosts>
+{% for host in wazuh_manager_indexer_hosts %}
+    <host>{{ host }}</host>
+{% endfor %}
+  </hosts>

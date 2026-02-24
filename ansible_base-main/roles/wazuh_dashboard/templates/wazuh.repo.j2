@@ -1,0 +1,11 @@
+[{{ wazuh_dashboard_repo_rpm_name }}]
+gpgcheck=1
+gpgkey={{ wazuh_dashboard_repo_rpm_gpgkey }}
+enabled=1
+name=EL-$releasever - {{ wazuh_dashboard_repo_rpm_name }}
+baseurl={{ wazuh_dashboard_repo_rpm_baseurl }}
+{% if ansible_facts['distribution_major_version'] | int >= 9 %}
+priority=1
+{% else %}
+protect=1
+{% endif %}
