@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  BigFix Task: Deploy Grafana Alloy + NVIDIA GPU Exporter
+  
+  INSTRUCTIONS:
+  1. Host the Deploy-AlloyAndNvidiaExporter.ps1 script on a BigFix relay
+     share or HTTP endpoint accessible to your endpoints.
+  2. Update the download URL in the prefetch block below.
+  3. Optionally pre-stage the installer binaries alongside the script
+     if endpoints lack direct internet access to GitHub.
+  4. Import this .bes file into your BigFix console.
+  5. Adjust the Relevance to target the right machines.
+
+  ARCHITECTURE:
+  - Alloy on each Windows endpoint scrapes metrics locally (GPU + OS)
+  - Pushes metrics outbound via HTTPS to nginx reverse proxy
+  - nginx terminates TLS, enforces basic auth, proxies to Prometheus/Loki on loopback
+  - No inbound scrape ports needed on Windows endpoints
+  - Prometheus stays bound to 127.0.0.1
+-->
+<BES xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="BES.xsd">
+  <Task>
+    <Title>Deploy Grafana Alloy v1.14.1 + NVIDIA GPU Exporter v1.4.1 (WinSW + nginx proxy)</Title>
+    <Description><![CDATA[
+      <P>Deploys Grafana Alloy (telemetry collector) and the nvidia_gpu_exporter
+      as Windows services. Metrics and logs are pushed outbound via HTTPS to
+      nginx reverse proxies fronting Prometheus and Loki. The GPU exporter is
+      wrapped using WinSW (MIT license, actively maintained).</P>
+
+      <P><B>Prerequisites:</B></P>
+      <UL>
+        <LI>Windows 10 / Server 2016+ (amd64)</LI>
+        <LI>NVIDIA drivers installed (for GPU metrics)</LI>
+        <LI>Network access to GitHub releases OR pre-staged binaries</LI>
+        <LI>nginx telemetry proxy vhosts deployed (see nginx-telemetry-proxies.conf)</LI>
+      </UL>
+
+      <P><B>What this task does:</B></P>
+      <UL>
+        <LI>Downloads and silently installs Grafana Alloy</LI>
+        <LI>Downloads nvidia_gpu_exporter + WinSW v2.12.0, installs as a service</LI>
+        <LI>Writes config.alloy with push-based remote-write through nginx proxy</LI>
+        <LI>Opens local firewall rules for Alloy UI (12345) and GPU exporter (9835)</LI>
+        <LI>Starts both services</LI>
+      </UL>
+    ]]></Description>
+    <GroupRelevance JoinByIntersection="true">
+      <SearchComponentRelevance>
+        <Relevance>name of operating system contains "Win"</Relevance>
+      </SearchComponentRelevance>
+      <SearchComponentRelevance>
+        <Relevance>x64 of operating system</Relevance>
+      </SearchComponentRelevance>
+      <SearchComponentRelevance>
+        <Relevance>not exists services whose (name of it = "Alloy" AND image path of it contains "1.14.1")</Relevance>
+      </SearchComponentRelevance>
+    </GroupRelevance>
+
+    <Category>Monitoring</Category>
+    <Source>Internal - Infrastructure</Source>
+    <SourceID>ALLOY-GPU-003</SourceID>
+    <SourceSeverity>Moderate</SourceSeverity>
+    <MIMEField>
+      <n>x-fixlet-modification-time</n>
+      <Value>Thu, 03 Apr 2026 12:00:00 +0000</Value>
+    </MIMEField>
+
+    <DefaultAction ID="Action1">
+      <Description>
+        <PreLink>Click </PreLink>
+        <Link>here</Link>
+        <PostLink> to deploy Grafana Alloy and NVIDIA GPU Exporter.</PostLink>
+      </Description>
+      <ActionScript MIMEType="application/x-Fixlet-Windows-Shell"><![CDATA[
+
+// -------------------------------------------------------------------
+// OPTION A: Download script from a relay share / HTTP endpoint
+// -------------------------------------------------------------------
+// prefetch Deploy-AlloyAndNvidiaExporter.ps1 sha1:YOURHASHHERE size:FILESIZE http://your-relay:52311/Uploads/Deploy-AlloyAndNvidiaExporter.ps1 sha256:YOURHASHHERE
+
+// -------------------------------------------------------------------
+// OPTION B: Embed the script inline via createfile / appendfile
+// -------------------------------------------------------------------
+// delete __createfile
+// createfile until END_OF_SCRIPT
+// <paste entire PS1 content here>
+// END_OF_SCRIPT
+// move __createfile "{pathname of client folder of current site}\Deploy-AlloyAndNvidiaExporter.ps1"
+
+// -------------------------------------------------------------------
+// Execute the deployment script
+// -------------------------------------------------------------------
+waithidden powershell.exe -ExecutionPolicy Bypass -NoProfile -NonInteractive -File "{pathname of client folder of current site}\Deploy-AlloyAndNvidiaExporter.ps1"
+
+// Verify services are running
+continue if {exists services whose (name of it = "Alloy" AND state of it = "Running")}
+continue if {exists services whose (name of it = "nvidia_gpu_exporter" AND state of it = "Running")}
+
+      ]]></ActionScript>
+      <SuccessCriteria Option="RunToCompletion"></SuccessCriteria>
+      <Settings>
+        <PreActionCacheDownload>false</PreActionCacheDownload>
+        <HasRunningMessage>false</HasRunningMessage>
+        <HasTimeRange>false</HasTimeRange>
+        <HasStartTime>false</HasStartTime>
+        <HasEndTime>true</HasEndTime>
+        <EndDateTimeLocalOffset>P7D</EndDateTimeLocalOffset>
+        <HasDayOfWeekConstraint>false</HasDayOfWeekConstraint>
+        <UseUTCTime>false</UseUTCTime>
+        <ActiveUserRequirement>NoRequirement</ActiveUserRequirement>
+        <ActiveUserType>AllUsers</ActiveUserType>
+        <HasWhose>false</HasWhose>
+        <Reapply>false</Reapply>
+        <HasReapplyLimit>false</HasReapplyLimit>
+        <HasReapplyInterval>false</HasReapplyInterval>
+        <HasRetry>true</HasRetry>
+        <RetryCount>3</RetryCount>
+        <RetryWait Behavior="WaitForInterval">PT15M</RetryWait>
+        <HasTemporalDistribution>false</HasTemporalDistribution>
+      </Settings>
+    </DefaultAction>
+  </Task>
+</BES>
